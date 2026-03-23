@@ -40,19 +40,19 @@ body {
 .ticker-wrapper {
     display: flex;
     align-items: center;
-    background: rgba(0,0,0,0.5);
+    background: rgba(0,0,0,0.6);
     border: 1px solid var(--panel-border);
     border-radius: 12px;
     margin-bottom: 1.5rem;
     overflow: hidden;
-    height: 42px;
+    height: 38px;
 }
 .ticker-label {
     background: #e63946;
     color: #fff;
-    padding: 0 12px;
+    padding: 0 10px;
     font-weight: 700;
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     letter-spacing: 1px;
     height: 100%;
     display: flex;
@@ -62,34 +62,40 @@ body {
 }
 .ticker-track {
     display: flex;
-    gap: 2rem;
-    padding: 0 1rem;
+    align-items: center;
+    gap: 0;
+    padding: 0 0.75rem;
     overflow-x: auto;
     white-space: nowrap;
     scrollbar-width: none;
     flex: 1;
+    height: 100%;
 }
 .ticker-track::-webkit-scrollbar { display: none; }
-.ticker-placeholder { color: var(--text-muted); font-size: 0.85rem; }
+.ticker-placeholder { color: var(--text-muted); font-size: 0.8rem; }
 .ticker-game {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
-    font-size: 0.85rem;
+    gap: 6px;
+    font-size: 0.78rem;
     font-weight: 500;
     flex-shrink: 0;
-    padding: 4px 0;
+    padding: 0 10px;
+    height: 100%;
+    border-right: 1px solid rgba(255,255,255,0.06);
 }
+.ticker-game:last-child { border-right: none; }
 .ticker-game .league-tag {
-    font-size: 0.65rem;
-    background: rgba(255,255,255,0.1);
-    padding: 2px 6px;
-    border-radius: 4px;
+    font-size: 0.6rem;
+    background: rgba(255,255,255,0.08);
+    padding: 1px 5px;
+    border-radius: 3px;
     color: var(--text-muted);
+    font-weight: 600;
 }
-.ticker-game .score { color: var(--accent); font-weight: 600; }
-.ticker-game .status { color: var(--text-muted); font-size: 0.75rem; }
-.ticker-divider { color: rgba(255,255,255,0.15); }
+.ticker-game .score { color: var(--accent); font-weight: 700; font-size: 0.8rem; }
+.ticker-game .at-sign { color: rgba(255,255,255,0.25); font-size: 0.7rem; }
+.ticker-game .status { color: var(--text-muted); font-size: 0.65rem; margin-left: 2px; }
 
 /* ================== HEADER ================== */
 .header { text-align: center; margin-bottom: 1.5rem; animation: slideDown 0.8s ease-out; }
@@ -112,10 +118,13 @@ body {
     padding: 0.5rem 1.2rem;
     border-radius: 20px;
     font-family: var(--font-body);
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
 }
 .nav-btn:hover { background: rgba(255,255,255,0.1); color: var(--text-main); }
 .nav-btn.active {
@@ -123,6 +132,7 @@ body {
     color: #fff;
     border-color: transparent;
 }
+.nav-btn .icon { font-size: 1rem; line-height: 1; }
 
 /* ================== LAYOUT ================== */
 .main-content { display: grid; grid-template-columns: 1fr 2fr; gap: 2rem; }

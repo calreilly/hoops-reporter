@@ -27,16 +27,16 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch(`${API_BASE}/api/scores`);
             const data = await res.json();
             if (data.games && data.games.length > 0) {
-                track.innerHTML = data.games.map((g, i) => 
+                track.innerHTML = data.games.map(g => 
                     `<div class="ticker-game">
                         <span class="league-tag">${g.league}</span>
                         <span>${g.away}</span>
                         <span class="score">${g.away_score}</span>
-                        <span style="color: var(--text-muted);">@</span>
+                        <span class="at-sign">@</span>
                         <span>${g.home}</span>
                         <span class="score">${g.home_score}</span>
                         <span class="status">${g.status}</span>
-                    </div>${i < data.games.length - 1 ? '<span class="ticker-divider">|</span>' : ''}`
+                    </div>`
                 ).join('');
             } else {
                 track.innerHTML = '<span class="ticker-placeholder">No games scheduled right now</span>';

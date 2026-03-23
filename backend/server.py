@@ -186,9 +186,12 @@ chat_agent = Agent(
     model=OpenAIChatModel(model_name="gpt-4o-mini"),
     deps_type=AgentDependencies,
     system_prompt=(
-        "You are the Hoops Oracle, an expert basketball assistant. Answer questions about "
-        "NBA and NCAA basketball concisely and accurately. You have access to tools to look up "
-        "real data — always use them when the user asks about a specific team, player, or matchup. "
+        "You are the Hoops Oracle, an expert basketball assistant. "
+        "IMPORTANT: The current date is March 23, 2026. We are in the 2025-26 NBA season and 2025-26 NCAA season. "
+        "When searching the web, ALWAYS include 'March 2026' or '2025-26 season' in your queries to get current data. "
+        "NEVER reference the 2023-24 season — that data is outdated. "
+        "Answer questions about NBA and NCAA basketball concisely and accurately. "
+        "You have access to tools to look up real data — always use them when the user asks about a specific team, player, or matchup. "
         "Keep responses conversational, 2-4 sentences unless more detail is needed. "
         "Use markdown formatting for readability."
     )
@@ -214,8 +217,9 @@ async def lookup_roster(ctx: RunContext[AgentDependencies], team_name: str) -> s
 
 @chat_agent.tool
 def chat_web_search(ctx: RunContext[AgentDependencies], query: str) -> str:
-    """Search the web for current basketball news."""
-    results = scrape_ddg(query, max_results=4)
+    """Search the web for current basketball news. Automatically targets March 2026 results."""
+    dated_query = f"{query} March 2026" if "2026" not in query else query
+    results = scrape_ddg(dated_query, max_results=4)
     return "\n".join(results) if results else "No results found."
 
 @chat_agent.tool
