@@ -35,8 +35,11 @@ hot_stories_agent = Agent(
         "You are a Senior Editor for the Hoops Oracle. "
         "I will provide you with raw search engine headlines for today's basketball news. "
         "Your job is to curate and summarize the Top 3 most important storylines in a beautifully formatted markdown list. "
+        "CRITICAL INSTRUCTION: Your stories MUST be highly specific, relevant, and informative. DO NOT write vague meta-descriptions like 'Read analysis of the bracket' or 'Coaching carousel begins.' "
+        "Instead, provide concrete facts! Explicitly name the teams, specific college/NBA players, exact scores, injury status, and specific coaching firings/hirings mentioned in the snippets. "
+        "Filter out generic TV guide or streaming schedule articles. Focus strictly on actual basketball events. "
         "Do not include a main title. Just jump straight into the 3 stories using `### 1. [Story Title]` format. "
-        "Keep it punchy, engaging, and professional."
+        "Keep it punchy, highly factual, and engaging."
     )
 )
 
@@ -91,15 +94,16 @@ async def generate_report(req: PromptRequest):
 @app.get("/api/hot-stories")
 async def get_hot_stories():
     try:
-        # Search DuckDuckGo for general basketball news
-        query = urllib.parse.quote("college basketball OR NBA news today 2026")
+        # Search DuckDuckGo for specific basketball facts
+        query = urllib.parse.quote("college basketball OR NBA headlines scores injuries rumors 2026")
         url = f"https://html.duckduckgo.com/html/?q={query}"
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
         response = requests.get(url, headers=headers)
         soup = BeautifulSoup(response.text, 'html.parser')
         
         results = []
-        for item in soup.find_all('div', class_='result')[:8]:
+        # Pull 15 results to give the LLM plenty of specific facts to choose from
+        for item in soup.find_all('div', class_='result')[:15]:
             title_tag = item.find('a', class_='result__a')
             snippet_tag = item.find('a', class_='result__snippet')
             title = title_tag.text.strip() if title_tag else ""
