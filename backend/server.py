@@ -111,7 +111,7 @@ hot_stories_agent = Agent(
     model=OpenAIChatModel(model_name="gpt-4o-mini"),
     deps_type=NewsletterDeps,
     system_prompt=(
-        "You are a Senior Editor for the Hoops Oracle, writing a comprehensive basketball newsletter. "
+        "You are a Senior Editor for the Hoops Report, writing a comprehensive basketball newsletter. "
         "You will receive initial headlines and snippets, but you also have TOOLS to get more details.\n\n"
         "YOUR WORKFLOW:\n"
         "1. Read the initial headlines provided in the prompt.\n"
@@ -186,7 +186,7 @@ chat_agent = Agent(
     model=OpenAIChatModel(model_name="gpt-4o-mini"),
     deps_type=AgentDependencies,
     system_prompt=(
-        "You are the Hoops Oracle, an expert basketball assistant. "
+        "You are the Hoops Reporter, an expert basketball assistant. "
         "IMPORTANT: The current date is March 23, 2026. We are in the 2025-26 NBA season and 2025-26 NCAA season. "
         "When searching the web, ALWAYS include 'March 2026' or '2025-26 season' in your queries to get current data. "
         "NEVER reference the 2023-24 season — that data is outdated. "
@@ -232,7 +232,7 @@ def chat_knowledge_base(ctx: RunContext[AgentDependencies], query: str) -> str:
 spotlight_agent = Agent(
     model=OpenAIChatModel(model_name="gpt-4o-mini"),
     system_prompt=(
-        "You are a Player Profile Writer for the Hoops Oracle. "
+        "You are a Player Profile Writer for the Hoops Report. "
         "Given raw data about a player (roster info, team recent games, web search results, scouting notes), "
         "write a detailed, engaging player spotlight card.\n\n"
         "FORMAT:\n"
@@ -321,7 +321,7 @@ async def get_scores():
     return {"games": games}
 
 # ==========================================
-# FEATURE 2: Ask the Oracle Chat
+# FEATURE 2: Ask the Reporter Chat
 # ==========================================
 @app.post("/api/chat")
 async def chat(req: ChatRequest):

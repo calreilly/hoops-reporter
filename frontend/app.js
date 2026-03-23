@@ -197,7 +197,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ==========================================
-    // FEATURE 2: Ask the Oracle Chat
+    // FEATURE 2: Ask the Reporter Chat
     // ==========================================
     const chatInput = document.getElementById('chatInput');
     const chatSendBtn = document.getElementById('chatSendBtn');
@@ -218,7 +218,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Loading bubble
         const loadingBubble = document.createElement('div');
         loadingBubble.className = 'chat-bubble oracle';
-        loadingBubble.innerHTML = '<em>Oracle is thinking...</em>';
+        loadingBubble.innerHTML = '<em>Reporter is thinking...</em>';
         chatMessages.appendChild(loadingBubble);
         chatMessages.scrollTop = chatMessages.scrollHeight;
 
@@ -229,7 +229,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ message })
             });
             const data = await res.json();
-            loadingBubble.innerHTML = `<strong>Oracle:</strong> ${marked.parse(data.reply)}`;
+            loadingBubble.innerHTML = `<strong>Reporter:</strong> ${marked.parse(data.reply)}`;
             
             // Show tool trace inline if tools were used
             if (data.tool_trace && data.tool_trace.length > 0) {
@@ -239,7 +239,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 loadingBubble.innerHTML += `<div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid rgba(255,255,255,0.05);">${traceHtml}</div>`;
             }
         } catch (e) {
-            loadingBubble.innerHTML = '<strong>Oracle:</strong> <span style="color: #ff6b6b;">Connection error. Is the backend running?</span>';
+            loadingBubble.innerHTML = '<strong>Reporter:</strong> <span style="color: #ff6b6b;">Connection error. Is the backend running?</span>';
         }
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
