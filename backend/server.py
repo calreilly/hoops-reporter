@@ -4,6 +4,9 @@ from fastapi.middleware.cors import CORSMiddleware
 import sys
 import os
 import json
+import urllib.parse
+import requests
+from bs4 import BeautifulSoup
 
 # Add the src folder to path so we can import our agent
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -24,6 +27,17 @@ auditor_agent = Agent(
         "Output ONLY a valid JSON object strictly matching this format without markdown codeblocks: {\"factuality_score\": 95, \"auditor_note\": \"The report accurately cites injuries...\"}"
     ),
     output_type=str
+)
+
+hot_stories_agent = Agent(
+    model=OpenAIChatModel(model_name="gpt-4o-mini"),
+    system_prompt=(
+        "You are a Senior Editor for the Hoops Oracle. "
+        "I will provide you with raw search engine headlines for today's basketball news. "
+        "Your job is to curate and summarize the Top 3 most important storylines in a beautifully formatted markdown list. "
+        "Do not include a main title. Just jump straight into the 3 stories using `### 1. [Story Title]` format. "
+        "Keep it punchy, engaging, and professional."
+    )
 )
 
 # Allow requests from our vanilla HTML frontend
@@ -73,6 +87,39 @@ async def generate_report(req: PromptRequest):
                 "trust_score": audit_data.get("factuality_score", 90),
                 "auditor_note": audit_data.get("auditor_note", "Verified Component.")
             }
+
+@app.get("/api/hot-stories")
+async def get_hot_stories():
+    try:
+        # Search DuckDuckGo for general basketball news
+        query = urllib.parse.quote("college basketball OR NBA news today 2026")
+        url = f"https://html.duckduckgo.com/html/?q={query}"
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        response = requests.get(url, headers=headers)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        results = []
+        for item in soup.find_all('div', class_='result')[:8]:
+            title_tag = item.find('a', class_='result__a')
+            snippet_tag = item.find('a', class_='result__snippet')
+            title = title_tag.text.strip() if title_tag else ""
+            snippet = snippet_tag.text.strip() if snippet_tag else ""
+            if title:
+                results.append(f"Headline: {title}\nSnippet: {snippet}")
+                
+        raw_news = "\n\n".join(results)
+        if not raw_news:
+            return {"feed": "No active stories found right now."}
+            
+        result = await hot_stories_agent.run(f"Raw news feed:\n{raw_news}")
+        try:
+            feed_text = result.new_messages()[-1].parts[-1].content
+        except Exception:
+            feed_text = getattr(result, 'data', str(result))
+            
+        return {"feed": feed_text}
+    except Exception as e:
+        return {"feed": f"Failed to fetch hot stories: {e}"}
 
 if __name__ == "__main__":
     import uvicorn

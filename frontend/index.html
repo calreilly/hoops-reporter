@@ -20,7 +20,12 @@
             <p class="subtitle">AI Sports Desk Powered by MCP & Vector DB</p>
         </header>
 
-        <main class="main-content">
+        <div class="tabs-container">
+            <button class="tab-btn active" data-target="reportView">Draft Report</button>
+            <button class="tab-btn" data-target="hotStoriesView">Hot Stories</button>
+        </div>
+
+        <main class="main-content" id="reportView">
             <div class="input-panel glass-panel">
                 <h2>New Assignment</h2>
                 <div class="input-group">
@@ -49,6 +54,21 @@
                     <div class="empty-state">
                         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
                         <p>Feed is empty. Submit an assignment to begin.</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <main class="main-content hidden" id="hotStoriesView">
+            <div class="output-panel glass-panel" style="width: 100%;">
+                <div class="panel-header">
+                    <h2>Live Hot Stories Feed</h2>
+                    <button class="primary-btn shrink-btn" id="refreshFeedBtn">Refresh Feed</button>
+                </div>
+                <div class="report-content" id="hotStoriesContainer">
+                    <div class="empty-state">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8l-4 4v16a2 2 0 0 0 2 2z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                        <p>Click Refresh to fetch the latest stories instantly.</p>
                     </div>
                 </div>
             </div>
