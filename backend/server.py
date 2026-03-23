@@ -617,20 +617,71 @@ if __name__ == "__main__":
 # ==========================================
 # FEATURE 7: Player Stock Market (Sentiment)
 # ==========================================
+
+def scrape_tweets(player_name, max_results=12):
+    """Scrape tweets about a player from X/Twitter via DuckDuckGo site:x.com queries."""
+    all_tweets = []
+    
+    queries = [
+        f"site:x.com {player_name} basketball",
+        f"site:twitter.com {player_name} basketball",
+        f"site:x.com {player_name} NBA",
+        f"site:x.com {player_name} NCAA",
+    ]
+    
+    seen = set()
+    for q in queries:
+        encoded = urllib.parse.quote(q)
+        url = f"https://html.duckduckgo.com/html/?q={encoded}"
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        try:
+            resp = requests.get(url, headers=headers, timeout=8)
+            soup = BeautifulSoup(resp.text, 'html.parser')
+            for item in soup.find_all('div', class_='result')[:max_results]:
+                title_tag = item.find('a', class_='result__a')
+                snippet_tag = item.find('a', class_='result__snippet')
+                title = title_tag.text.strip() if title_tag else ""
+                snippet = snippet_tag.text.strip() if snippet_tag else ""
+                # Only keep items that look like tweets (from x.com or twitter.com)
+                href = ""
+                if title_tag and title_tag.get('href'):
+                    href = title_tag['href']
+                
+                content = snippet if snippet else title
+                if content and content not in seen:
+                    seen.add(content)
+                    is_tweet = 'x.com' in href or 'twitter.com' in href or 'x.com' in title.lower() or 'twitter' in title.lower()
+                    source = "𝕏 Tweet" if is_tweet else "Web"
+                    all_tweets.append(f"[{source}] {content}")
+        except Exception as e:
+            print(f"Tweet scrape error for '{q}': {e}")
+            continue
+        
+        if len(all_tweets) >= max_results:
+            break
+    
+    return all_tweets[:max_results]
+
 @app.get("/api/stock/{player_name}")
 async def get_player_stock(player_name: str):
-    """Analyze media sentiment for a player and return a stock price."""
-    # 1. Scrape news about the player
-    search_query = f"{player_name} basketball news March 2026"
-    raw_snippets = scrape_ddg(search_query, max_results=10)
+    """Analyze media sentiment for a player from X/Twitter and return a stock price."""
     
-    # Also try a second query for more coverage
-    raw_snippets += scrape_ddg(f"{player_name} NBA NCAA stats 2025-26 season", max_results=5)
+    # 1. Scrape tweets from X about the player
+    print(f"[Stock Market] Scraping tweets for: {player_name}")
+    raw_snippets = scrape_tweets(player_name, max_results=12)
+    print(f"[Stock Market] Found {len(raw_snippets)} tweet snippets")
     
-    # RAG archive search
+    # Fallback: if X search returns nothing, try general web search
+    if len(raw_snippets) < 3:
+        print("[Stock Market] Few tweets found, adding general web results...")
+        raw_snippets += scrape_ddg(f"{player_name} basketball March 2026", max_results=8)
+    
+    # RAG archive search for additional context
     rag_results = rag_retriever.hybrid_search(player_name, top_k=3)
     if rag_results:
-        raw_snippets += [f"**Archive:** {r}" for r in rag_results]
+        raw_snippets += [f"[Scouting Archive] {r}" for r in rag_results]
+    
+    print(f"[Stock Market] Total snippets for analysis: {len(raw_snippets)}")
     
     if not raw_snippets:
         return {
