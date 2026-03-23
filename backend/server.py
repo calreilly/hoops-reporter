@@ -708,7 +708,7 @@ async def get_player_stock(player_name: str):
     
     try:
         result = await sentiment_agent.run(prompt)
-        raw_output = result.data.strip()
+        raw_output = result.output.strip()
         # Clean markdown codeblocks if present
         if raw_output.startswith("```json"): raw_output = raw_output[7:]
         if raw_output.startswith("```"): raw_output = raw_output[3:]
