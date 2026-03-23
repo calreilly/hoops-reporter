@@ -102,24 +102,27 @@ document.addEventListener('DOMContentLoaded', () => {
         type();
     }
 
-    // Tabs Logic
-    const tabBtns = document.querySelectorAll('.tab-btn');
-    const views = {
-        'reportView': document.getElementById('reportView'),
-        'hotStoriesView': document.getElementById('hotStoriesView')
-    };
+    // Navigation Logic
+    const openReporterBtn = document.getElementById('openReporterBtn');
+    const backToStoriesBtn = document.getElementById('backToStoriesBtn');
+    const reportView = document.getElementById('reportView');
+    const hotStoriesView = document.getElementById('hotStoriesView');
 
-    tabBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            tabBtns.forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            Object.values(views).forEach(v => v.classList.add('hidden'));
-            const targetViewId = btn.getAttribute('data-target');
-            if(views[targetViewId]) {
-                views[targetViewId].classList.remove('hidden');
-            }
+    if (openReporterBtn && backToStoriesBtn) {
+        openReporterBtn.addEventListener('click', () => {
+            reportView.classList.remove('hidden');
+            hotStoriesView.classList.add('hidden');
+            openReporterBtn.classList.add('hidden');
+            backToStoriesBtn.classList.remove('hidden');
         });
-    });
+
+        backToStoriesBtn.addEventListener('click', () => {
+            hotStoriesView.classList.remove('hidden');
+            reportView.classList.add('hidden');
+            backToStoriesBtn.classList.add('hidden');
+            openReporterBtn.classList.remove('hidden');
+        });
+    }
 
     // Hot Stories Feature
     const refreshFeedBtn = document.getElementById('refreshFeedBtn');
@@ -156,6 +159,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 refreshFeedBtn.textContent = "Refresh Feed";
             }
         });
+
+        // Auto-fetch on load
+        setTimeout(() => refreshFeedBtn.click(), 500);
     }
 
 });

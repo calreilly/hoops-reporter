@@ -20,12 +20,12 @@
             <p class="subtitle">AI Sports Desk Powered by MCP & Vector DB</p>
         </header>
 
-        <div class="tabs-container">
-            <button class="tab-btn active" data-target="reportView">Draft Report</button>
-            <button class="tab-btn" data-target="hotStoriesView">Hot Stories</button>
+        <div class="nav-controls" style="display: flex; justify-content: center; gap: 1rem; margin-bottom: 2rem;">
+            <button id="openReporterBtn" class="primary-btn shrink-btn" style="margin: 0; max-width: 250px;"><span class="icon">✍️</span> Draft Custom Report</button>
+            <button id="backToStoriesBtn" class="tab-btn hidden" style="margin: 0;"><span class="icon">🏠</span> Back to Stories</button>
         </div>
 
-        <main class="main-content" id="reportView">
+        <main class="main-content hidden" id="reportView">
             <div class="input-panel glass-panel">
                 <h2>New Assignment</h2>
                 <div class="input-group">
@@ -59,7 +59,9 @@
             </div>
         </main>
 
-        <main class="main-content hidden" id="hotStoriesView">
+        </main>
+
+        <main class="single-column" id="hotStoriesView">
             <div class="output-panel glass-panel" style="width: 100%;">
                 <div class="panel-header">
                     <h2>Live Hot Stories Feed</h2>
