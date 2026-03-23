@@ -32,14 +32,27 @@ auditor_agent = Agent(
 hot_stories_agent = Agent(
     model=OpenAIChatModel(model_name="gpt-4o-mini"),
     system_prompt=(
-        "You are a Senior Editor for the Hoops Oracle. "
-        "I will provide you with raw search engine headlines for today's basketball news. "
-        "Your job is to curate and summarize the Top 3 most important storylines in a beautifully formatted markdown list. "
-        "CRITICAL INSTRUCTION: Your stories MUST be highly specific, relevant, and informative. DO NOT write vague meta-descriptions like 'Read analysis of the bracket' or 'Coaching carousel begins.' "
-        "Instead, provide concrete facts! Explicitly name the teams, specific college/NBA players, exact scores, injury status, and specific coaching firings/hirings mentioned in the snippets. "
-        "Filter out generic TV guide or streaming schedule articles. Focus strictly on actual basketball events. "
-        "Do not include a main title. Just jump straight into the 3 stories using `### 1. [Story Title]` format. "
-        "Keep it punchy, highly factual, and engaging."
+        "You are a Senior Editor for the Hoops Oracle, writing a comprehensive basketball newsletter. "
+        "I will provide you with raw search engine headlines covering both NCAA and NBA basketball. "
+        "Your job is to write a FULL newsletter covering ALL noteworthy stories. DO NOT limit yourself to 3 stories. "
+        "Cover as many distinct real stories as exist in the data.\n\n"
+        "FORMAT YOUR OUTPUT EXACTLY LIKE THIS:\n"
+        "## 🏫 College Basketball\n"
+        "Then list each college story as:\n"
+        "### [Specific Story Title]\n"
+        "[2-3 sentence summary with concrete details]\n\n"
+        "---\n\n"
+        "## 🏀 NBA\n"
+        "Then list each NBA story as:\n"
+        "### [Specific Story Title]\n"
+        "[2-3 sentence summary with concrete details]\n\n"
+        "CRITICAL RULES:\n"
+        "- NEVER be vague. Every story MUST name specific teams, players, scores, or coaches.\n"
+        "- If a snippet says '[specific teams and scores]' or is placeholder text, SKIP that story entirely.\n"
+        "- Do NOT write generic summaries like 'Teams are competing' or 'Analysts are speculating.' State what ACTUALLY happened.\n"
+        "- Filter out TV schedule, streaming guide, and bracket prediction articles. Focus on EVENTS that happened or real news.\n"
+        "- Add a horizontal rule (---) between each story for visual separation.\n"
+        "- Keep each story punchy: 2-3 sentences max with hard facts."
     )
 )
 
@@ -93,29 +106,47 @@ async def generate_report(req: PromptRequest):
 
 @app.get("/api/hot-stories")
 async def get_hot_stories():
-    try:
-        # Search DuckDuckGo for specific basketball facts
-        query = urllib.parse.quote("college basketball OR NBA headlines scores injuries rumors 2026")
-        url = f"https://html.duckduckgo.com/html/?q={query}"
+    def scrape_ddg(query_str, max_results=10):
+        """Scrape DuckDuckGo HTML for headlines and snippets."""
+        encoded = urllib.parse.quote(query_str)
+        url = f"https://html.duckduckgo.com/html/?q={encoded}"
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-        response = requests.get(url, headers=headers)
-        soup = BeautifulSoup(response.text, 'html.parser')
+        try:
+            resp = requests.get(url, headers=headers, timeout=8)
+            soup = BeautifulSoup(resp.text, 'html.parser')
+            items = []
+            for item in soup.find_all('div', class_='result')[:max_results]:
+                title_tag = item.find('a', class_='result__a')
+                snippet_tag = item.find('a', class_='result__snippet')
+                title = title_tag.text.strip() if title_tag else ""
+                snippet = snippet_tag.text.strip() if snippet_tag else ""
+                if title and title not in seen_titles:
+                    seen_titles.add(title)
+                    items.append(f"Headline: {title}\nSnippet: {snippet}")
+            return items
+        except Exception:
+            return []
+
+    try:
+        seen_titles = set()
         
-        results = []
-        # Pull 15 results to give the LLM plenty of specific facts to choose from
-        for item in soup.find_all('div', class_='result')[:15]:
-            title_tag = item.find('a', class_='result__a')
-            snippet_tag = item.find('a', class_='result__snippet')
-            title = title_tag.text.strip() if title_tag else ""
-            snippet = snippet_tag.text.strip() if snippet_tag else ""
-            if title:
-                results.append(f"Headline: {title}\nSnippet: {snippet}")
-                
-        raw_news = "\n\n".join(results)
+        # Run multiple targeted searches for breadth
+        queries = [
+            "NCAA tournament March Madness 2026 scores results upsets",
+            "NBA scores trades rumors today 2026",
+            "NBA injury report player updates 2026",
+            "college basketball coaching changes firings hirings 2026",
+        ]
+        
+        all_results = []
+        for q in queries:
+            all_results.extend(scrape_ddg(q, max_results=8))
+        
+        raw_news = "\n\n".join(all_results)
         if not raw_news:
             return {"feed": "No active stories found right now."}
             
-        result = await hot_stories_agent.run(f"Raw news feed:\n{raw_news}")
+        result = await hot_stories_agent.run(f"Today's date is March 23, 2026. Write a comprehensive newsletter from these raw headlines:\n\n{raw_news}")
         try:
             feed_text = result.new_messages()[-1].parts[-1].content
         except Exception:

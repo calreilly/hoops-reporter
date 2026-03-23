@@ -141,3 +141,54 @@ textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 
     .main-content { grid-template-columns: 1fr; }
     .header h1 { font-size: 2.2rem; }
 }
+
+/* Newsletter Story Styling */
+.markdown-body h2 {
+    font-family: var(--font-heading);
+    font-size: 1.6rem;
+    font-weight: 700;
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--primary);
+    color: var(--primary);
+}
+
+.markdown-body h3 {
+    font-family: var(--font-heading);
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-top: 1.5rem;
+    margin-bottom: 0.5rem;
+    color: #fff;
+}
+
+.markdown-body p {
+    margin-bottom: 1rem;
+    line-height: 1.7;
+    color: #c9d1d9;
+}
+
+.markdown-body hr {
+    border: none;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    margin: 1.5rem 0;
+}
+
+.markdown-body ul, .markdown-body ol {
+    margin-bottom: 1rem;
+    padding-left: 1.5rem;
+}
+
+.markdown-body strong {
+    color: #fff;
+}
+
+.shrink-btn {
+    padding: 0.5rem 1.5rem;
+    font-size: 0.95rem;
+    border-radius: 20px;
+    flex: 0 0 auto;
+    width: auto;
+    margin: 0;
+}
