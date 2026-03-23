@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hoops Reporter AI</title>
+    <title>Hoops Oracle — AI Sports Intelligence</title>
+    <meta name="description" content="AI-powered basketball intelligence platform with live scores, news, and analytics">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -12,6 +13,14 @@
     <div class="glow-bg"></div>
     <div class="dashboard-container">
         
+        <!-- FEATURE 1: Live Scoreboard Ticker -->
+        <div class="ticker-wrapper">
+            <div class="ticker-label">LIVE</div>
+            <div class="ticker-track" id="tickerTrack">
+                <span class="ticker-placeholder">Loading scores...</span>
+            </div>
+        </div>
+
         <header class="header">
             <div class="logo">
                 <span class="icon">🏀</span>
@@ -20,12 +29,40 @@
             <p class="subtitle">AI Sports Desk Powered by MCP & Vector DB</p>
         </header>
 
-        <div class="nav-controls" style="display: flex; justify-content: center; gap: 1rem; margin-bottom: 2rem;">
-            <button id="openReporterBtn" class="primary-btn shrink-btn" style="margin: 0; max-width: 250px;"><span class="icon">✍️</span> Draft Custom Report</button>
-            <button id="backToStoriesBtn" class="tab-btn hidden" style="margin: 0;"><span class="icon">🏠</span> Back to Stories</button>
-        </div>
+        <!-- Navigation -->
+        <nav class="nav-controls" id="mainNav">
+            <button class="nav-btn active" data-view="hotStoriesView"><span class="icon">📰</span> Hot Stories</button>
+            <button class="nav-btn" data-view="reportView"><span class="icon">✍️</span> Reporter</button>
+            <button class="nav-btn" data-view="chatView"><span class="icon">💬</span> Ask Oracle</button>
+            <button class="nav-btn" data-view="spotlightView"><span class="icon">🌟</span> Player Spotlight</button>
+            <button class="nav-btn" data-view="analyticsView"><span class="icon">📊</span> Analytics</button>
+        </nav>
 
-        <main class="main-content hidden" id="reportView">
+        <!-- VIEW: Hot Stories (default) -->
+        <main class="view-panel single-column" id="hotStoriesView">
+            <div class="output-panel glass-panel" style="width: 100%;">
+                <div class="panel-header">
+                    <h2>Live Hot Stories Feed</h2>
+                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        <span class="cache-badge hidden" id="cacheBadge">⚡ Cached</span>
+                        <div class="trust-badge hidden" id="feedTrustBadge">
+                            <svg width="16" height="16" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>
+                            <span id="feedTrustText">Verified: --%</span>
+                        </div>
+                        <button class="primary-btn shrink-btn" id="refreshFeedBtn">Refresh Feed</button>
+                    </div>
+                </div>
+                <div class="report-content" id="hotStoriesContainer">
+                    <div class="empty-state">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8l-4 4v16a2 2 0 0 0 2 2z"></path></svg>
+                        <p>Loading stories...</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- VIEW: Reporter -->
+        <main class="view-panel main-content hidden" id="reportView">
             <div class="input-panel glass-panel">
                 <h2>New Assignment</h2>
                 <div class="input-group">
@@ -37,7 +74,6 @@
                     <div class="spinner hidden"></div>
                 </button>
             </div>
-
             <div class="output-panel glass-panel">
                 <div class="panel-header">
                     <h2>Generated Report</h2>
@@ -52,34 +88,83 @@
                         <span id="statusText">Awaiting Request</span>
                     </div>
                     <div class="empty-state">
-                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
                         <p>Feed is empty. Submit an assignment to begin.</p>
                     </div>
                 </div>
+                <!-- FEATURE 4: Pipeline Visualization -->
+                <div class="pipeline-viz hidden" id="pipelineViz">
+                    <button class="pipeline-toggle" id="pipelineToggle">🔧 Show Agent Pipeline</button>
+                    <div class="pipeline-content hidden" id="pipelineContent"></div>
+                </div>
             </div>
         </main>
 
-
-        <main class="single-column" id="hotStoriesView">
+        <!-- VIEW: Chat (FEATURE 2) -->
+        <main class="view-panel single-column hidden" id="chatView">
             <div class="output-panel glass-panel" style="width: 100%;">
                 <div class="panel-header">
-                    <h2>Live Hot Stories Feed</h2>
-                    <div style="display: flex; align-items: center; gap: 1rem;">
-                        <div class="trust-badge hidden" id="feedTrustBadge" title="Newsletter Fact-Check Score">
-                            <svg width="16" height="16" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>
-                            <span id="feedTrustText">Verified: --%</span>
-                        </div>
-                        <button class="primary-btn shrink-btn" id="refreshFeedBtn">Refresh Feed</button>
+                    <h2>💬 Ask the Oracle</h2>
+                </div>
+                <div class="chat-messages" id="chatMessages">
+                    <div class="chat-bubble oracle">
+                        <strong>Oracle:</strong> Hey! I'm the Hoops Oracle. Ask me anything about NBA or NCAA basketball — I'll look it up in real-time using ESPN, our scouting archive, and live web data.
                     </div>
                 </div>
-                <div class="report-content" id="hotStoriesContainer">
+                <div class="chat-input-area">
+                    <input type="text" id="chatInput" class="chat-input" placeholder="e.g. What's UConn's record this season?" autocomplete="off">
+                    <button class="primary-btn shrink-btn" id="chatSendBtn">Send</button>
+                </div>
+            </div>
+        </main>
+
+        <!-- VIEW: Player Spotlight (FEATURE 3) -->
+        <main class="view-panel single-column hidden" id="spotlightView">
+            <div class="output-panel glass-panel" style="width: 100%;">
+                <div class="panel-header">
+                    <h2>🌟 Player Spotlight</h2>
+                    <div class="trust-badge hidden" id="spotlightTrustBadge">
+                        <svg width="16" height="16" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>
+                        <span id="spotlightTrustText">--</span>
+                    </div>
+                </div>
+                <div class="spotlight-search">
+                    <input type="text" id="playerSearchInput" class="chat-input" placeholder="Search for a player (e.g. LeBron James, Donovan Clingan)">
+                    <button class="primary-btn shrink-btn" id="playerSearchBtn">Search</button>
+                </div>
+                <div class="report-content" id="spotlightContainer">
                     <div class="empty-state">
-                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8l-4 4v16a2 2 0 0 0 2 2z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-                        <p>Click Refresh to fetch the latest stories instantly.</p>
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="5"></circle><path d="M20 21a8 8 0 0 0-16 0"></path></svg>
+                        <p>Enter a player name to generate their spotlight profile.</p>
                     </div>
                 </div>
             </div>
         </main>
+
+        <!-- VIEW: Analytics (FEATURE 6) -->
+        <main class="view-panel single-column hidden" id="analyticsView">
+            <div class="output-panel glass-panel" style="width: 100%;">
+                <div class="panel-header">
+                    <h2>📊 Evaluation Dashboard</h2>
+                    <button class="primary-btn shrink-btn" id="refreshAnalyticsBtn">Refresh</button>
+                </div>
+                <div class="analytics-summary" id="analyticsSummary">
+                    <div class="stat-card glass-panel">
+                        <div class="stat-value" id="avgScoreStat">--</div>
+                        <div class="stat-label">Avg Trust Score</div>
+                    </div>
+                    <div class="stat-card glass-panel">
+                        <div class="stat-value" id="totalEvalsStat">--</div>
+                        <div class="stat-label">Total Evaluations</div>
+                    </div>
+                </div>
+                <div class="eval-chart" id="evalChart"></div>
+                <div class="eval-log" id="evalLog">
+                    <p style="color: var(--text-muted); text-align: center;">No evaluations yet. Generate reports or view stories to populate.</p>
+                </div>
+            </div>
+        </main>
+
     </div>
     <script src="app.js"></script>
 </body>
