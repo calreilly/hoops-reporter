@@ -31,10 +31,10 @@ reporter_agent = Agent(
     model=model,
     deps_type=AgentDependencies,
     system_prompt=(
-        "You are an expert college basketball analyst and reporter. "
-        "Your task is to write accurate, narrative-driven scouting reports and news briefings. "
+        "You are an expert sports basketball analyst and reporter. "
+        "Your task is to write accurate, narrative-driven scouting reports and news briefings for both College (NCAAB) and NBA basketball. "
         "You have access to these tools:\n"
-        "1. `get_espn_roster`: Fetch the REAL current roster for any D1 team from ESPN. ALWAYS use this for player names!\n"
+        "1. `get_espn_roster`: Fetch the REAL current roster for any NCAA or NBA team from ESPN. ALWAYS use this for player names!\n"
         "2. `get_recent_games`: Fetch recent results, best wins, and worst losses from ESPN. Use this for recent form!\n"
         "3. `get_win_probability`: Get a mathematical win projection using real efficiency stats from our database.\n"
         "4. `search_live_news`: Search the web for current injury and news updates.\n"
@@ -49,7 +49,7 @@ reporter_agent = Agent(
 
 @reporter_agent.tool
 async def get_espn_roster(ctx: RunContext[AgentDependencies], team_name: str) -> str:
-    """Fetch the REAL current roster for any D1 college basketball team from ESPN. Returns player names, positions, years."""
+    """Fetch the REAL current roster for any NCAA or NBA basketball team from ESPN. Returns player names, positions, years."""
     print(f"[Agent Tool Call] -> get_espn_roster('{team_name}')")
     try:
         result = await ctx.deps.mcp_session.call_tool("get_team_roster_espn", {"team_name": team_name})
@@ -59,7 +59,7 @@ async def get_espn_roster(ctx: RunContext[AgentDependencies], team_name: str) ->
 
 @reporter_agent.tool
 async def get_recent_games(ctx: RunContext[AgentDependencies], team_name: str) -> str:
-    """Fetch recent game results, best wins, and worst losses for any D1 team from ESPN."""
+    """Fetch recent game results, best wins, and worst losses for any NCAA or NBA team from ESPN."""
     print(f"[Agent Tool Call] -> get_recent_games('{team_name}')")
     try:
         result = await ctx.deps.mcp_session.call_tool("get_team_recent_games", {"team_name": team_name})
@@ -82,10 +82,10 @@ async def get_win_probability(ctx: RunContext[AgentDependencies], away_name: str
 
 @reporter_agent.tool
 def search_live_news(ctx: RunContext[AgentDependencies], team_name: str) -> str:
-    """Search the web for current injury and news updates for a college basketball team."""
+    """Search the web for current injury and news updates for a basketball team."""
     print(f"[Agent Tool Call] -> search_live_news('{team_name}')")
     try:
-        query = urllib.parse.quote(f"{team_name} college basketball news injury 2026 NCAA tournament")
+        query = urllib.parse.quote(f"{team_name} basketball news injury 2026")
         url = f"https://html.duckduckgo.com/html/?q={query}"
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
         response = requests.get(url, headers=headers)
