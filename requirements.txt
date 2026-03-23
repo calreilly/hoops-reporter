@@ -1,0 +1,8 @@
+pydantic-ai
+chromadb
+ragas
+mcp
+fastmcp
+python-dotenv
+openai
+pytest
