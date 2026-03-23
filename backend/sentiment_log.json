@@ -47,5 +47,19 @@
     "avg_sentiment": 0.0,
     "stock_price": 100.0,
     "num_snippets": 0
+  },
+  {
+    "timestamp": "2026-03-23T12:53:48.019823",
+    "player": "tarris reed",
+    "avg_sentiment": 0.0,
+    "stock_price": 100.0,
+    "num_snippets": 0
+  },
+  {
+    "timestamp": "2026-03-23T12:53:58.084597",
+    "player": "shai gilgeous-alexander",
+    "avg_sentiment": 0.0,
+    "stock_price": 100.0,
+    "num_snippets": 0
   }
 ]

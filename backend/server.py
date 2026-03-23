@@ -257,6 +257,10 @@ spotlight_agent = Agent(
     model=OpenAIChatModel(model_name="gpt-4o-mini"),
     system_prompt=(
         "You are a Player Profile Writer for the Hoops Report. "
+        "IMPORTANT: Today's date is March 23, 2026. We are in the 2025-26 season. "
+        "Any game or event before March 23, 2026 has ALREADY HAPPENED — write about it in past tense. "
+        "Do NOT preview or hype upcoming matchups that may have already been played. "
+        "If you are unsure whether a game has been played, state results if available or say 'result pending'. "
         "Given raw data about a player (roster info, team recent games, web search results, scouting notes), "
         "write a detailed, engaging player spotlight card.\n\n"
         "FORMAT:\n"
@@ -270,7 +274,7 @@ spotlight_agent = Agent(
         "### Scouting Report\n"
         "[2-3 sentences of analysis from the scouting archive]\n\n"
         "### Latest News\n"
-        "[Key recent news items]\n\n"
+        "[Key recent news items — ONLY reference events that have already occurred as of March 23, 2026]\n\n"
         "Use ONLY facts from the provided data. Do NOT fabricate statistics."
     )
 )
