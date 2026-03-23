@@ -133,16 +133,24 @@ document.addEventListener('DOMContentLoaded', () => {
         refreshFeedBtn.addEventListener('click', async () => {
             if (isFetchingStories) return;
             isFetchingStories = true;
-            refreshFeedBtn.textContent = "Fetching...";
+            refreshFeedBtn.textContent = "Agent Researching...";
+            
+            const feedTrustBadge = document.getElementById('feedTrustBadge');
+            if (feedTrustBadge) feedTrustBadge.classList.add('hidden');
             
             hotStoriesContainer.innerHTML = `
                 <div class="loading-skeleton">
                     <div class="shimmer-line"></div>
+                    <div class="shimmer-line w-75"></div>
+                    <div class="shimmer-line"></div>
+                    <br>
+                    <div class="shimmer-line w-50"></div>
                     <div class="shimmer-line"></div>
                     <div class="shimmer-line w-75"></div>
                     <br>
-                    <div class="shimmer-line"></div>
-                    <div class="shimmer-line w-50"></div>
+                    <p style="text-align: center; color: var(--text-muted); font-size: 0.9rem; margin-top: 1rem;">
+                        🔍 Agent is searching the web, consulting ESPN via MCP, and querying our RAG archive...
+                    </p>
                 </div>
             `;
 
@@ -151,6 +159,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!res.ok) throw new Error("API failed");
                 const data = await res.json();
                 hotStoriesContainer.innerHTML = '<div class="markdown-body" style="animation: fadeIn 0.5s ease-out; line-height: 1.6;">' + marked.parse(data.feed) + '</div>';
+                
+                // Show trust score badge
+                if (data.trust_score && feedTrustBadge) {
+                    const feedTrustText = document.getElementById('feedTrustText');
+                    feedTrustBadge.classList.remove('hidden');
+                    feedTrustText.textContent = `Verified: ${data.trust_score}%`;
+                }
             } catch (e) {
                 console.error(e);
                 hotStoriesContainer.innerHTML = `<div style="color: #ff6b6b; text-align: center; padding: 2rem;">Error fetching Hot Stories.</div>`;
