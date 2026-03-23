@@ -33,26 +33,46 @@ hot_stories_agent = Agent(
     model=OpenAIChatModel(model_name="gpt-4o-mini"),
     system_prompt=(
         "You are a Senior Editor for the Hoops Oracle, writing a comprehensive basketball newsletter. "
-        "I will provide you with raw search engine headlines covering both NCAA and NBA basketball. "
-        "Your job is to write a FULL newsletter covering ALL noteworthy stories. DO NOT limit yourself to 3 stories. "
-        "Cover as many distinct real stories as exist in the data.\n\n"
+        "I will provide you with raw search engine headlines and snippets covering both NCAA and NBA basketball.\n\n"
+        "ABSOLUTE RULE — ZERO HALLUCINATION POLICY:\n"
+        "You are ONLY allowed to state facts that are EXPLICITLY written in the provided snippets. "
+        "If a snippet says 'Iowa pulled off a stunning upset' but does NOT name the opponent, you MUST write "
+        "'Iowa pulled off a stunning upset' — do NOT guess or infer the opponent. "
+        "If a snippet says 'High Point shocked the basketball world' but does NOT say who they beat, "
+        "do NOT fill in a team name. Just say 'High Point pulled off a major upset.' "
+        "NEVER invent scores, opponents, matchup details, or any fact not directly stated in the snippets. "
+        "If two snippets contradict each other, report only the claim that appears more frequently.\n\n"
         "FORMAT YOUR OUTPUT EXACTLY LIKE THIS:\n"
         "## 🏫 College Basketball\n"
         "Then list each college story as:\n"
         "### [Specific Story Title]\n"
-        "[2-3 sentence summary with concrete details]\n\n"
+        "[2-3 sentence summary using ONLY facts from the snippets]\n\n"
         "---\n\n"
         "## 🏀 NBA\n"
         "Then list each NBA story as:\n"
         "### [Specific Story Title]\n"
-        "[2-3 sentence summary with concrete details]\n\n"
-        "CRITICAL RULES:\n"
-        "- NEVER be vague. Every story MUST name specific teams, players, scores, or coaches.\n"
-        "- If a snippet says '[specific teams and scores]' or is placeholder text, SKIP that story entirely.\n"
-        "- Do NOT write generic summaries like 'Teams are competing' or 'Analysts are speculating.' State what ACTUALLY happened.\n"
-        "- Filter out TV schedule, streaming guide, and bracket prediction articles. Focus on EVENTS that happened or real news.\n"
+        "[2-3 sentence summary using ONLY facts from the snippets]\n\n"
+        "ADDITIONAL RULES:\n"
+        "- Cover as many distinct real stories as exist. Do NOT cap at 3.\n"
+        "- Filter out TV schedules, streaming guides, and bracket prediction articles.\n"
         "- Add a horizontal rule (---) between each story for visual separation.\n"
-        "- Keep each story punchy: 2-3 sentences max with hard facts."
+        "- Do NOT repeat the same story twice even if multiple snippets cover it — merge them into one entry.\n"
+        "- Keep each story to 2-3 sentences with ONLY sourced facts."
+    )
+)
+
+newsletter_auditor = Agent(
+    model=OpenAIChatModel(model_name="gpt-4o-mini"),
+    system_prompt=(
+        "You are a Fact-Check Auditor. You will receive two things:\n"
+        "1. RAW SOURCE DATA: The original search engine snippets.\n"
+        "2. DRAFT NEWSLETTER: A newsletter written from those snippets.\n\n"
+        "Your job: Review every factual claim in the DRAFT. If ANY claim (a score, an opponent, a matchup result, "
+        "a player stat, a coaching hire/fire) is NOT explicitly supported by the RAW SOURCE DATA, "
+        "you must REMOVE or CORRECT that claim.\n\n"
+        "Output the CORRECTED newsletter in the exact same markdown format. "
+        "If a story becomes empty after removing unsupported claims, remove the story entirely. "
+        "Do NOT add any new information. Only keep or remove claims."
     )
 )
 
@@ -146,11 +166,23 @@ async def get_hot_stories():
         if not raw_news:
             return {"feed": "No active stories found right now."}
             
-        result = await hot_stories_agent.run(f"Today's date is March 23, 2026. Write a comprehensive newsletter from these raw headlines:\n\n{raw_news}")
+        result = await hot_stories_agent.run(f"Today's date is March 23, 2026. Write a comprehensive newsletter using ONLY facts from these raw snippets. Do NOT infer or guess any details not explicitly stated:\n\n{raw_news}")
         try:
-            feed_text = result.new_messages()[-1].parts[-1].content
+            draft_text = result.new_messages()[-1].parts[-1].content
         except Exception:
-            feed_text = getattr(result, 'data', str(result))
+            draft_text = getattr(result, 'data', str(result))
+        
+        # Second pass: Auditor verifies every claim against the raw source data
+        try:
+            audit_result = await newsletter_auditor.run(
+                f"RAW SOURCE DATA:\n{raw_news}\n\n---\n\nDRAFT NEWSLETTER:\n{draft_text}"
+            )
+            try:
+                feed_text = audit_result.new_messages()[-1].parts[-1].content
+            except Exception:
+                feed_text = getattr(audit_result, 'data', str(audit_result))
+        except Exception:
+            feed_text = draft_text  # Fall back to unaudited draft
             
         return {"feed": feed_text}
     except Exception as e:
