@@ -19,5 +19,19 @@
     "avg_sentiment": 0.0,
     "stock_price": 100.0,
     "num_snippets": 0
+  },
+  {
+    "timestamp": "2026-03-23T12:40:15.559995",
+    "player": "tarris reed",
+    "avg_sentiment": 0.0,
+    "stock_price": 100.0,
+    "num_snippets": 0
+  },
+  {
+    "timestamp": "2026-03-23T12:40:36.494647",
+    "player": "lebron james",
+    "avg_sentiment": 0.0,
+    "stock_price": 100.0,
+    "num_snippets": 0
   }
 ]

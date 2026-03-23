@@ -618,65 +618,73 @@ if __name__ == "__main__":
 # FEATURE 7: Player Stock Market (Sentiment)
 # ==========================================
 
-def scrape_tweets(player_name, max_results=12):
-    """Scrape tweets about a player from X/Twitter via DuckDuckGo site:x.com queries."""
-    all_tweets = []
+def fetch_player_news(player_name, max_results=15):
+    """Fetch news about a player from ESPN's public API."""
+    snippets = []
     
-    queries = [
-        f"site:x.com {player_name} basketball",
-        f"site:twitter.com {player_name} basketball",
-        f"site:x.com {player_name} NBA",
-        f"site:x.com {player_name} NCAA",
-    ]
-    
-    seen = set()
-    for q in queries:
-        encoded = urllib.parse.quote(q)
-        url = f"https://html.duckduckgo.com/html/?q={encoded}"
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-        try:
-            resp = requests.get(url, headers=headers, timeout=8)
-            soup = BeautifulSoup(resp.text, 'html.parser')
-            for item in soup.find_all('div', class_='result')[:max_results]:
-                title_tag = item.find('a', class_='result__a')
-                snippet_tag = item.find('a', class_='result__snippet')
-                title = title_tag.text.strip() if title_tag else ""
-                snippet = snippet_tag.text.strip() if snippet_tag else ""
-                # Only keep items that look like tweets (from x.com or twitter.com)
-                href = ""
-                if title_tag and title_tag.get('href'):
-                    href = title_tag['href']
-                
-                content = snippet if snippet else title
-                if content and content not in seen:
-                    seen.add(content)
-                    is_tweet = 'x.com' in href or 'twitter.com' in href or 'x.com' in title.lower() or 'twitter' in title.lower()
-                    source = "𝕏 Tweet" if is_tweet else "Web"
-                    all_tweets.append(f"[{source}] {content}")
-        except Exception as e:
-            print(f"Tweet scrape error for '{q}': {e}")
-            continue
+    # Step 1: Search ESPN for the player's athlete ID
+    try:
+        search_url = f"https://site.api.espn.com/apis/common/v3/search?query={urllib.parse.quote(player_name)}&type=player&limit=1"
+        resp = requests.get(search_url, timeout=6)
+        data = resp.json()
+        items = data.get("items", [])
         
-        if len(all_tweets) >= max_results:
-            break
+        if items:
+            athlete_id = items[0].get("id", "")
+            athlete_name = items[0].get("displayName", player_name)
+            print(f"[Stock Market] Found ESPN athlete: {athlete_name} (ID: {athlete_id})")
+            
+            # Step 2: Fetch player-specific news
+            for sport in ["basketball/nba", "basketball/mens-college-basketball"]:
+                try:
+                    news_url = f"https://site.api.espn.com/apis/site/v2/sports/{sport}/news?athlete={athlete_id}&limit=10"
+                    resp2 = requests.get(news_url, timeout=6)
+                    if resp2.status_code == 200:
+                        articles = resp2.json().get("articles", [])
+                        for a in articles:
+                            headline = a.get("headline", "")
+                            description = a.get("description", "")
+                            content = f"[ESPN] {headline}: {description}" if description else f"[ESPN] {headline}"
+                            if content and content not in snippets:
+                                snippets.append(content)
+                except Exception:
+                    continue
+    except Exception as e:
+        print(f"[Stock Market] ESPN search error: {e}")
     
-    return all_tweets[:max_results]
+    # Step 3: Also search league-wide news mentioning the player
+    for sport_path in ["basketball/nba", "basketball/mens-college-basketball"]:
+        try:
+            news_url = f"https://site.api.espn.com/apis/site/v2/sports/{sport_path}/news?limit=20"
+            resp = requests.get(news_url, timeout=6)
+            if resp.status_code == 200:
+                articles = resp.json().get("articles", [])
+                name_lower = player_name.lower()
+                for a in articles:
+                    headline = a.get("headline", "")
+                    description = a.get("description", "")
+                    full_text = f"{headline} {description}".lower()
+                    # Check if player is mentioned
+                    name_parts = name_lower.split()
+                    if any(part in full_text for part in name_parts if len(part) > 2):
+                        content = f"[ESPN] {headline}: {description}" if description else f"[ESPN] {headline}"
+                        if content not in snippets:
+                            snippets.append(content)
+        except Exception:
+            continue
+    
+    print(f"[Stock Market] ESPN returned {len(snippets)} news snippets")
+    return snippets[:max_results]
 
 @app.get("/api/stock/{player_name}")
 async def get_player_stock(player_name: str):
-    """Analyze media sentiment for a player from X/Twitter and return a stock price."""
+    """Analyze media sentiment for a player using ESPN news and return a stock price."""
     
-    # 1. Scrape tweets from X about the player
-    print(f"[Stock Market] Scraping tweets for: {player_name}")
-    raw_snippets = scrape_tweets(player_name, max_results=12)
-    print(f"[Stock Market] Found {len(raw_snippets)} tweet snippets")
+    # 1. Fetch news from ESPN API
+    print(f"[Stock Market] Analyzing sentiment for: {player_name}")
+    raw_snippets = fetch_player_news(player_name, max_results=15)
     
-    # Fallback: if X search returns nothing, try general web search
-    if len(raw_snippets) < 3:
-        print("[Stock Market] Few tweets found, adding general web results...")
-        raw_snippets += scrape_ddg(f"{player_name} basketball March 2026", max_results=8)
-    
-    # RAG archive search for additional context
+    # 2. RAG archive search for additional scouting context
     rag_results = rag_retriever.hybrid_search(player_name, top_k=3)
     if rag_results:
         raw_snippets += [f"[Scouting Archive] {r}" for r in rag_results]
