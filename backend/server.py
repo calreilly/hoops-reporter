@@ -54,6 +54,9 @@ mcp_server_script = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath
 # ---------- Eval Log ----------
 EVAL_LOG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "eval_log.json")
 
+# ---------- Sentiment Log (Player Stock Market) ----------
+SENTIMENT_LOG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sentiment_log.json")
+
 def log_eval(entry_type, score, note=""):
     """Append an eval entry to the JSON log."""
     entry = {
@@ -70,6 +73,27 @@ def log_eval(entry_type, score, note=""):
             log = []
         log.append(entry)
         with open(EVAL_LOG_PATH, 'w') as f:
+            json.dump(log, f, indent=2)
+    except Exception:
+        pass
+
+def log_sentiment(player_name, avg_score, stock_price, num_snippets):
+    """Append a sentiment scan entry to the sentiment log."""
+    entry = {
+        "timestamp": datetime.now().isoformat(),
+        "player": player_name.lower(),
+        "avg_sentiment": round(avg_score, 3),
+        "stock_price": round(stock_price, 1),
+        "num_snippets": num_snippets
+    }
+    try:
+        if os.path.exists(SENTIMENT_LOG_PATH):
+            with open(SENTIMENT_LOG_PATH, 'r') as f:
+                log = json.load(f)
+        else:
+            log = []
+        log.append(entry)
+        with open(SENTIMENT_LOG_PATH, 'w') as f:
             json.dump(log, f, indent=2)
     except Exception:
         pass
@@ -249,6 +273,27 @@ spotlight_agent = Agent(
         "[Key recent news items]\n\n"
         "Use ONLY facts from the provided data. Do NOT fabricate statistics."
     )
+)
+
+# ---------- Sentiment Analysis Agent (Player Stock Market) ----------
+sentiment_agent = Agent(
+    model=OpenAIChatModel(model_name="gpt-4o-mini"),
+    system_prompt=(
+        "You are a Sports Media Sentiment Analyst. "
+        "IMPORTANT: The current date is March 23, 2026. We are in the 2025-26 season. "
+        "You will receive a list of news snippets about a basketball player. "
+        "For EACH snippet, analyze the sentiment toward the player and assign a score.\n\n"
+        "SCORING SCALE:\n"
+        "-1.0 = Extremely negative (career-ending injury, suspension, major controversy)\n"
+        "-0.5 = Moderately negative (poor performance, team loss blamed on player)\n"
+        " 0.0 = Neutral (roster move, general mention, stats without context)\n"
+        "+0.5 = Moderately positive (good game, praise from coaches)\n"
+        "+1.0 = Extremely positive (MVP candidacy, record-breaking, championship heroics)\n\n"
+        "Output ONLY a valid JSON array (no markdown codeblocks) with this format:\n"
+        '[{"snippet": "first 60 chars of snippet...", "score": 0.5, "rationale": "one sentence why"}]\n\n'
+        "If no snippets are relevant to the player, return an empty array: []"
+    ),
+    output_type=str
 )
 
 # ---------- CORS ----------
@@ -568,3 +613,110 @@ async def get_eval_history():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("backend.server:app", host="127.0.0.1", port=8000, reload=True)
+
+# ==========================================
+# FEATURE 7: Player Stock Market (Sentiment)
+# ==========================================
+@app.get("/api/stock/{player_name}")
+async def get_player_stock(player_name: str):
+    """Analyze media sentiment for a player and return a stock price."""
+    # 1. Scrape news about the player
+    search_query = f"{player_name} basketball news March 2026"
+    raw_snippets = scrape_ddg(search_query, max_results=10)
+    
+    # Also try a second query for more coverage
+    raw_snippets += scrape_ddg(f"{player_name} NBA NCAA stats 2025-26 season", max_results=5)
+    
+    # RAG archive search
+    rag_results = rag_retriever.hybrid_search(player_name, top_k=3)
+    if rag_results:
+        raw_snippets += [f"**Archive:** {r}" for r in rag_results]
+    
+    if not raw_snippets:
+        return {
+            "stock_price": 100.0,
+            "avg_sentiment": 0.0,
+            "trend_pct": 0.0,
+            "trend_direction": "—",
+            "snippets": [],
+            "history": [],
+            "player": player_name
+        }
+    
+    # 2. Run sentiment analysis via LLM
+    snippet_text = "\n".join([f"{i+1}. {s}" for i, s in enumerate(raw_snippets)])
+    prompt = f"Analyze sentiment for **{player_name}** in these snippets:\n\n{snippet_text}"
+    
+    try:
+        result = await sentiment_agent.run(prompt)
+        raw_output = result.data.strip()
+        # Clean markdown codeblocks if present
+        if raw_output.startswith("```json"): raw_output = raw_output[7:]
+        if raw_output.startswith("```"): raw_output = raw_output[3:]
+        if raw_output.endswith("```"): raw_output = raw_output[:-3]
+        analyzed = json.loads(raw_output.strip())
+    except Exception as e:
+        print(f"Sentiment parse error: {e}")
+        analyzed = []
+    
+    # 3. Compute aggregate metrics
+    if analyzed:
+        scores = [item.get("score", 0) for item in analyzed]
+        avg_sentiment = sum(scores) / len(scores)
+    else:
+        avg_sentiment = 0.0
+    
+    stock_price = 100.0 + (avg_sentiment * 50.0)
+    
+    # 4. Get history and compute trend
+    history = []
+    try:
+        if os.path.exists(SENTIMENT_LOG_PATH):
+            with open(SENTIMENT_LOG_PATH, 'r') as f:
+                all_logs = json.load(f)
+            history = [e for e in all_logs if e.get("player") == player_name.lower()]
+    except Exception:
+        pass
+    
+    trend_pct = 0.0
+    trend_direction = "—"
+    if history:
+        last_price = history[-1].get("stock_price", 100.0)
+        if last_price > 0:
+            trend_pct = round(((stock_price - last_price) / last_price) * 100, 1)
+            trend_direction = "⬆️" if trend_pct > 0 else "⬇️" if trend_pct < 0 else "—"
+    
+    # 5. Log this scan
+    log_sentiment(player_name, avg_sentiment, stock_price, len(analyzed))
+    
+    # 6. Re-read updated history
+    try:
+        if os.path.exists(SENTIMENT_LOG_PATH):
+            with open(SENTIMENT_LOG_PATH, 'r') as f:
+                all_logs = json.load(f)
+            history = [e for e in all_logs if e.get("player") == player_name.lower()]
+    except Exception:
+        pass
+    
+    return {
+        "stock_price": round(stock_price, 1),
+        "avg_sentiment": round(avg_sentiment, 3),
+        "trend_pct": trend_pct,
+        "trend_direction": trend_direction,
+        "snippets": analyzed[-15:],
+        "history": history[-30:],
+        "player": player_name
+    }
+
+@app.get("/api/stock-history/{player_name}")
+async def get_stock_history(player_name: str):
+    """Return all historical sentiment scans for a player."""
+    try:
+        if os.path.exists(SENTIMENT_LOG_PATH):
+            with open(SENTIMENT_LOG_PATH, 'r') as f:
+                all_logs = json.load(f)
+            history = [e for e in all_logs if e.get("player") == player_name.lower()]
+            return {"player": player_name, "history": history[-50:]}
+    except Exception:
+        pass
+    return {"player": player_name, "history": []}

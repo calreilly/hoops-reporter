@@ -330,4 +330,163 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // ==========================================
+    // FEATURE 7: Player Stock Market (Sentiment)
+    // ==========================================
+    const stockSearchBtn = document.getElementById('stockSearchBtn');
+    const stockSearchInput = document.getElementById('stockSearchInput');
+    const stockCard = document.getElementById('stockCard');
+    const sentimentList = document.getElementById('sentimentList');
+    const stockChartWrapper = document.getElementById('stockChartWrapper');
+
+    async function fetchStock() {
+        const name = stockSearchInput.value.trim();
+        if (!name) return;
+
+        stockCard.classList.add('hidden');
+        stockChartWrapper.classList.add('hidden');
+        sentimentList.innerHTML = `
+            <div class="loading-skeleton">
+                <div class="shimmer-line"></div><div class="shimmer-line w-75"></div><div class="shimmer-line"></div><br>
+                <p style="text-align: center; color: var(--text-muted); margin-top: 1rem;">📈 Scraping news, running LLM sentiment analysis...</p>
+            </div>`;
+
+        try {
+            const res = await fetch(`${API_BASE}/api/stock/${encodeURIComponent(name)}`);
+            const data = await res.json();
+
+            // Populate stock card
+            document.getElementById('stockPlayerName').textContent = data.player;
+            document.getElementById('stockPriceValue').textContent = data.stock_price.toFixed(1);
+            document.getElementById('trendArrow').textContent = data.trend_direction;
+            document.getElementById('trendPct').textContent = `${data.trend_pct > 0 ? '+' : ''}${data.trend_pct}%`;
+            document.getElementById('stockSnippetCount').textContent = `${data.snippets.length} snippets analyzed`;
+            document.getElementById('stockAvgSentiment').textContent = `Avg: ${data.avg_sentiment.toFixed(3)}`;
+
+            // Sentiment tag
+            const tag = document.getElementById('stockSentimentTag');
+            tag.className = 'stock-sentiment-tag';
+            if (data.avg_sentiment > 0.15) { tag.textContent = '🟢 BULLISH'; tag.classList.add('bullish'); }
+            else if (data.avg_sentiment < -0.15) { tag.textContent = '🔴 BEARISH'; tag.classList.add('bearish'); }
+            else { tag.textContent = '⚪ NEUTRAL'; tag.classList.add('neutral'); }
+
+            // Trend color
+            const trendEl = document.getElementById('stockTrend');
+            trendEl.className = 'stock-trend';
+            if (data.trend_pct > 0) trendEl.classList.add('positive');
+            else if (data.trend_pct < 0) trendEl.classList.add('negative');
+            else trendEl.classList.add('flat');
+
+            stockCard.classList.remove('hidden');
+
+            // Draw chart
+            if (data.history && data.history.length > 1) {
+                stockChartWrapper.classList.remove('hidden');
+                drawStockChart(data.history);
+            }
+
+            // Render sentiment snippets
+            if (data.snippets && data.snippets.length > 0) {
+                sentimentList.innerHTML = data.snippets.map(s => {
+                    const cls = s.score > 0.1 ? 'pos' : s.score < -0.1 ? 'neg' : 'neu';
+                    const scoreDisplay = s.score > 0 ? `+${s.score.toFixed(1)}` : s.score.toFixed(1);
+                    return `
+                        <div class="sentiment-item ${cls}">
+                            <div class="sentiment-score-pip ${cls}">${scoreDisplay}</div>
+                            <div>
+                                <div class="sentiment-text">${s.snippet || ''}</div>
+                                <div class="sentiment-rationale">${s.rationale || ''}</div>
+                            </div>
+                        </div>`;
+                }).join('');
+            } else {
+                sentimentList.innerHTML = '<p style="color: var(--text-muted); text-align: center;">No sentiment data returned.</p>';
+            }
+        } catch (e) {
+            sentimentList.innerHTML = `<div style="color: #ff6b6b; text-align: center; padding: 2rem;">Error fetching stock data.</div>`;
+        }
+    }
+
+    function drawStockChart(history) {
+        const canvas = document.getElementById('stockCanvas');
+        const ctx = canvas.getContext('2d');
+        const dpr = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width * dpr;
+        canvas.height = 200 * dpr;
+        ctx.scale(dpr, dpr);
+        const W = rect.width;
+        const H = 200;
+
+        ctx.clearRect(0, 0, W, H);
+
+        const prices = history.map(h => h.stock_price);
+        const minP = Math.min(...prices) - 5;
+        const maxP = Math.max(...prices) + 5;
+        const range = maxP - minP || 1;
+        const pad = { top: 15, bottom: 25, left: 5, right: 5 };
+        const chartW = W - pad.left - pad.right;
+        const chartH = H - pad.top - pad.bottom;
+
+        const points = prices.map((p, i) => ({
+            x: pad.left + (i / Math.max(prices.length - 1, 1)) * chartW,
+            y: pad.top + (1 - (p - minP) / range) * chartH
+        }));
+
+        // Gradient fill
+        const lastPrice = prices[prices.length - 1];
+        const firstPrice = prices[0];
+        const isUp = lastPrice >= firstPrice;
+        const fillGrad = ctx.createLinearGradient(0, pad.top, 0, H);
+        fillGrad.addColorStop(0, isUp ? 'rgba(76,175,80,0.25)' : 'rgba(244,67,54,0.25)');
+        fillGrad.addColorStop(1, 'rgba(0,0,0,0)');
+
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) {
+            ctx.lineTo(points[i].x, points[i].y);
+        }
+        ctx.lineTo(points[points.length - 1].x, H - pad.bottom);
+        ctx.lineTo(points[0].x, H - pad.bottom);
+        ctx.closePath();
+        ctx.fillStyle = fillGrad;
+        ctx.fill();
+
+        // Line
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) {
+            ctx.lineTo(points[i].x, points[i].y);
+        }
+        ctx.strokeStyle = isUp ? '#4CAF50' : '#F44336';
+        ctx.lineWidth = 2.5;
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+
+        // Data points
+        points.forEach((pt, i) => {
+            ctx.beginPath();
+            ctx.arc(pt.x, pt.y, 4, 0, Math.PI * 2);
+            ctx.fillStyle = isUp ? '#4CAF50' : '#F44336';
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        });
+
+        // Labels
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.font = '11px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        const labelInterval = Math.max(1, Math.floor(points.length / 6));
+        points.forEach((pt, i) => {
+            if (i % labelInterval === 0 || i === points.length - 1) {
+                ctx.fillText(prices[i].toFixed(0), pt.x, H - 5);
+            }
+        });
+    }
+
+    if (stockSearchBtn) stockSearchBtn.addEventListener('click', fetchStock);
+    if (stockSearchInput) stockSearchInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') fetchStock(); });
+
 });

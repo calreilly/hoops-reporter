@@ -386,6 +386,122 @@ textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 
 .markdown-body ul, .markdown-body ol { margin-bottom: 1rem; padding-left: 1.5rem; }
 .markdown-body strong { color: #fff; }
 
+/* ================== PLAYER STOCK MARKET (Feature 7) ================== */
+.stock-card {
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--panel-border);
+    border-radius: 16px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    animation: fadeIn 0.4s ease-out;
+}
+.stock-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+.stock-header h3 {
+    font-family: var(--font-heading);
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: #fff;
+    margin: 0;
+}
+.stock-sentiment-tag {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.stock-sentiment-tag.bullish { background: rgba(76,175,80,0.2); color: #4CAF50; }
+.stock-sentiment-tag.bearish { background: rgba(244,67,54,0.2); color: #F44336; }
+.stock-sentiment-tag.neutral { background: rgba(255,255,255,0.1); color: var(--text-muted); }
+.stock-price-row {
+    display: flex;
+    align-items: baseline;
+    gap: 1.5rem;
+    margin-bottom: 0.75rem;
+}
+.stock-price {
+    font-family: var(--font-heading);
+    font-size: 3.5rem;
+    font-weight: 800;
+    color: #fff;
+    line-height: 1;
+}
+.stock-trend {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 1.2rem;
+    font-weight: 700;
+}
+.stock-trend.positive { color: #4CAF50; }
+.stock-trend.negative { color: #F44336; }
+.stock-trend.flat { color: var(--text-muted); }
+.stock-meta {
+    display: flex;
+    gap: 1.5rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+.stock-chart-wrapper {
+    background: rgba(0,0,0,0.25);
+    border: 1px solid var(--panel-border);
+    border-radius: 12px;
+    padding: 1rem 1rem 0.5rem;
+    margin-bottom: 1.5rem;
+}
+.stock-chart-wrapper h4 {
+    font-family: var(--font-heading);
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+}
+.stock-chart-wrapper canvas {
+    width: 100%;
+    height: 200px;
+    display: block;
+}
+.sentiment-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.sentiment-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: rgba(0,0,0,0.2);
+    border-radius: 10px;
+    border-left: 4px solid transparent;
+    font-size: 0.88rem;
+    animation: fadeIn 0.3s ease-out;
+}
+.sentiment-item.pos { border-left-color: #4CAF50; }
+.sentiment-item.neg { border-left-color: #F44336; }
+.sentiment-item.neu { border-left-color: rgba(255,255,255,0.15); }
+.sentiment-score-pip {
+    flex-shrink: 0;
+    width: 44px;
+    text-align: center;
+    font-weight: 700;
+    font-size: 0.85rem;
+    padding: 3px 0;
+    border-radius: 6px;
+}
+.sentiment-score-pip.pos { background: rgba(76,175,80,0.2); color: #4CAF50; }
+.sentiment-score-pip.neg { background: rgba(244,67,54,0.2); color: #F44336; }
+.sentiment-score-pip.neu { background: rgba(255,255,255,0.08); color: var(--text-muted); }
+.sentiment-text { flex: 1; color: #c9d1d9; line-height: 1.4; }
+.sentiment-rationale { font-size: 0.78rem; color: var(--text-muted); font-style: italic; }
+
+
 /* ================== ANIMATIONS ================== */
 .hidden { display: none !important; }
 @keyframes slideDown { from { opacity: 0; transform: translateY(-30px); } to { opacity: 1; transform: translateY(0); } }
