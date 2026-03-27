@@ -238,6 +238,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 ).join(' → ');
                 loadingBubble.innerHTML += `<div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid rgba(255,255,255,0.05);">${traceHtml}</div>`;
             }
+
+            // Show RAG sources inline
+            if (data.rag_sources && data.rag_sources.length > 0) {
+                const uniqueId = 'sources_' + Math.random().toString(36).substr(2, 9);
+                const sourcesHtml = data.rag_sources.map(s => `
+                    <div class="rag-source-item" style="background: rgba(0,0,0,0.2); padding: 0.5rem; border-radius: 6px; font-size: 0.8rem; margin-top: 0.5rem; border-left: 2px solid var(--primary);">
+                        <strong style="color: var(--primary);">📄 ${s.source}</strong><br>
+                        <span style="color: rgba(255,255,255,0.7);">${s.content}</span>
+                    </div>
+                `).join('');
+                
+                loadingBubble.innerHTML += `
+                    <div style="margin-top: 0.75rem;">
+                        <button onclick="document.getElementById('${uniqueId}').classList.toggle('hidden')" style="background:none; border:1px solid rgba(255,255,255,0.1); padding:0.25rem 0.5rem; border-radius:4px; color:var(--text-light); cursor:pointer; font-size:0.75rem; transition: background 0.2s;">
+                            📚 Toggle RAG Sources (${data.rag_sources.length})
+                        </button>
+                        <div id="${uniqueId}" class="hidden" style="margin-top: 0.5rem;">
+                            ${sourcesHtml}
+                        </div>
+                    </div>
+                `;
+            }
         } catch (e) {
             loadingBubble.innerHTML = '<strong>Reporter:</strong> <span style="color: #ff6b6b;">Connection error. Is the backend running?</span>';
         }
@@ -266,11 +288,38 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const res = await fetch(`${API_BASE}/api/player/${encodeURIComponent(name)}`);
             const data = await res.json();
+            // Player Spotlight render
             spotlightContainer.innerHTML = '<div class="markdown-body" style="animation: fadeIn 0.5s ease-out;">' + marked.parse(data.card) + '</div>';
             
             if (data.trust_score && spotlightTrust) {
                 spotlightTrust.classList.remove('hidden');
                 document.getElementById('spotlightTrustText').textContent = `Trust: ${data.trust_score}%`;
+            }
+
+            // RAG Sources render
+            const sourcesPanel = document.getElementById('spotlightSourcesPanel');
+            const sourcesList = document.getElementById('spotlightSourcesList');
+            const sourcesToggle = document.getElementById('spotlightSourcesToggle');
+            if (data.rag_sources && data.rag_sources.length > 0) {
+                sourcesPanel.classList.remove('hidden');
+                sourcesToggle.textContent = `📚 View RAG Sources (${data.rag_sources.length})`;
+                sourcesList.innerHTML = data.rag_sources.map(s => `
+                    <div class="rag-source-item" style="background: rgba(0,0,0,0.2); padding: 0.75rem; border-radius: 8px; font-size: 0.85rem; border-left: 3px solid var(--primary);">
+                        <div style="color: var(--primary); font-weight: 600; margin-bottom: 0.25rem;">📄 ${s.source}</div>
+                        <div style="color: var(--text-muted); line-height: 1.4;">${s.content}</div>
+                    </div>
+                `).join('');
+                
+                const newToggle = sourcesToggle.cloneNode(true);
+                sourcesToggle.parentNode.replaceChild(newToggle, sourcesToggle);
+                newToggle.addEventListener('click', () => {
+                    sourcesList.classList.toggle('hidden');
+                    newToggle.textContent = sourcesList.classList.contains('hidden') ? 
+                        `📚 View RAG Sources (${data.rag_sources.length})` : 
+                        `📚 Hide RAG Sources`;
+                });
+            } else {
+                if (sourcesPanel) sourcesPanel.classList.add('hidden');
             }
         } catch (e) {
             spotlightContainer.innerHTML = `<div style="color: #ff6b6b; text-align: center; padding: 2rem;">Error fetching player data.</div>`;
@@ -331,162 +380,152 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ==========================================
-    // FEATURE 7: Player Stock Market (Sentiment)
+    // FEATURE 18: Ragas-Style Evaluation Suite
     // ==========================================
-    const stockSearchBtn = document.getElementById('stockSearchBtn');
-    const stockSearchInput = document.getElementById('stockSearchInput');
-    const stockCard = document.getElementById('stockCard');
-    const sentimentList = document.getElementById('sentimentList');
-    const stockChartWrapper = document.getElementById('stockChartWrapper');
-
-    async function fetchStock() {
-        const name = stockSearchInput.value.trim();
-        if (!name) return;
-
-        stockCard.classList.add('hidden');
-        stockChartWrapper.classList.add('hidden');
-        sentimentList.innerHTML = `
-            <div class="loading-skeleton">
-                <div class="shimmer-line"></div><div class="shimmer-line w-75"></div><div class="shimmer-line"></div><br>
-                <p style="text-align: center; color: var(--text-muted); margin-top: 1rem;">📈 Scraping news, running LLM sentiment analysis...</p>
-            </div>`;
-
-        try {
-            const res = await fetch(`${API_BASE}/api/stock/${encodeURIComponent(name)}`);
-            const data = await res.json();
-
-            // Populate stock card
-            document.getElementById('stockPlayerName').textContent = data.player;
-            document.getElementById('stockPriceValue').textContent = data.stock_price.toFixed(1);
-            document.getElementById('trendArrow').textContent = data.trend_direction;
-            document.getElementById('trendPct').textContent = `${data.trend_pct > 0 ? '+' : ''}${data.trend_pct}%`;
-            document.getElementById('stockSnippetCount').textContent = `${data.snippets.length} snippets analyzed`;
-            document.getElementById('stockAvgSentiment').textContent = `Avg: ${data.avg_sentiment.toFixed(3)}`;
-
-            // Sentiment tag
-            const tag = document.getElementById('stockSentimentTag');
-            tag.className = 'stock-sentiment-tag';
-            if (data.avg_sentiment > 0.15) { tag.textContent = '🟢 BULLISH'; tag.classList.add('bullish'); }
-            else if (data.avg_sentiment < -0.15) { tag.textContent = '🔴 BEARISH'; tag.classList.add('bearish'); }
-            else { tag.textContent = '⚪ NEUTRAL'; tag.classList.add('neutral'); }
-
-            // Trend color
-            const trendEl = document.getElementById('stockTrend');
-            trendEl.className = 'stock-trend';
-            if (data.trend_pct > 0) trendEl.classList.add('positive');
-            else if (data.trend_pct < 0) trendEl.classList.add('negative');
-            else trendEl.classList.add('flat');
-
-            stockCard.classList.remove('hidden');
-
-            // Draw chart
-            if (data.history && data.history.length > 1) {
-                stockChartWrapper.classList.remove('hidden');
-                drawStockChart(data.history);
+    const runRagEvalBtn = document.getElementById('runRagEvalBtn');
+    if (runRagEvalBtn) {
+        runRagEvalBtn.addEventListener('click', async () => {
+            const statusEl = document.getElementById('ragEvalStatus');
+            const summary1 = document.getElementById('ragEvalSummary');
+            const summary2 = document.getElementById('ragEvalSummary2');
+            const logEl = document.getElementById('ragEvalLog');
+            
+            runRagEvalBtn.disabled = true;
+            statusEl.classList.remove('hidden');
+            summary1.classList.add('hidden');
+            summary2.classList.add('hidden');
+            logEl.classList.add('hidden');
+            
+            try {
+                const res = await fetch(`${API_BASE}/api/eval-rag`, { method: "POST" });
+                const data = await res.json();
+                
+                document.getElementById('ragPrecisionStat').textContent = data.metrics.context_precision;
+                document.getElementById('ragRecallStat').textContent = data.metrics.context_recall;
+                document.getElementById('ragFaithfulnessStat').textContent = data.metrics.faithfulness;
+                document.getElementById('ragRelevanceStat').textContent = data.metrics.answer_relevance;
+                
+                logEl.innerHTML = data.details.map(d => `
+                    <div style="background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px; margin-top: 0.5rem; text-align: left;">
+                        <strong style="color: var(--primary);">Query:</strong> ${d.query}<br>
+                        <div style="font-size: 0.85rem; color: var(--text-muted); margin: 0.5rem 0;">${d.answer}</div>
+                        <div style="display: flex; gap: 1rem; font-size: 0.8rem; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 0.5rem;">
+                            <span title="Context Precision">🎯 P: ${d.scores.context_precision}</span>
+                            <span title="Context Recall">🔍 R: ${d.scores.context_recall}</span>
+                            <span title="Faithfulness">✅ F: ${d.scores.faithfulness}</span>
+                            <span title="Answer Relevance">📈 A: ${d.scores.answer_relevance}</span>
+                        </div>
+                    </div>
+                `).join('');
+                
+                summary1.classList.remove('hidden');
+                summary2.classList.remove('hidden');
+                logEl.classList.remove('hidden');
+                
+            } catch (e) {
+                console.error("RAG Eval failed", e);
+                logEl.innerHTML = `<div style="color: #ff6b6b; padding: 1rem; text-align: center;">Evaluation failed. Is the server running?</div>`;
+                logEl.classList.remove('hidden');
+            } finally {
+                runRagEvalBtn.disabled = false;
+                statusEl.classList.add('hidden');
             }
+        });
+    }
 
-            // Render sentiment snippets
-            if (data.snippets && data.snippets.length > 0) {
-                sentimentList.innerHTML = data.snippets.map(s => {
-                    const cls = s.score > 0.1 ? 'pos' : s.score < -0.1 ? 'neg' : 'neu';
-                    const scoreDisplay = s.score > 0 ? `+${s.score.toFixed(1)}` : s.score.toFixed(1);
-                    return `
-                        <div class="sentiment-item ${cls}">
-                            <div class="sentiment-score-pip ${cls}">${scoreDisplay}</div>
-                            <div>
-                                <div class="sentiment-text">${s.snippet || ''}</div>
-                                <div class="sentiment-rationale">${s.rationale || ''}</div>
-                            </div>
-                        </div>`;
-                }).join('');
+    // ==========================================
+    // FEATURE 19: Dynamic Knowledge Base Manager
+    // ==========================================
+    const refreshKbBtn = document.getElementById('refreshKbBtn');
+    const kbIngestBtn = document.getElementById('kbIngestBtn');
+    
+    async function fetchKnowledgeBase() {
+        const listEl = document.getElementById('kbDocumentList');
+        if (!listEl) return;
+        
+        try {
+            const res = await fetch(`${API_BASE}/api/knowledge`);
+            const data = await res.json();
+            
+            if (data.sources && data.sources.length > 0) {
+                listEl.innerHTML = data.sources.map(s => `
+                    <div style="background: rgba(0,0,0,0.2); padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 0.5rem; display: flex; align-items: center; border-left: 3px solid var(--primary);">
+                        <span style="font-size: 1.2rem; margin-right: 1rem;">📄</span>
+                        <span style="font-weight: 500;">${s}</span>
+                    </div>
+                `).join('');
             } else {
-                sentimentList.innerHTML = '<p style="color: var(--text-muted); text-align: center;">No sentiment data returned.</p>';
+                listEl.innerHTML = '<p style="color: var(--text-muted); text-align: center;">No documents found.</p>';
             }
         } catch (e) {
-            sentimentList.innerHTML = `<div style="color: #ff6b6b; text-align: center; padding: 2rem;">Error fetching stock data.</div>`;
+            console.error("Failed to fetch knowledge base", e);
+            listEl.innerHTML = '<p style="color: #ff6b6b; text-align: center;">Error loading documents.</p>';
         }
     }
-
-    function drawStockChart(history) {
-        const canvas = document.getElementById('stockCanvas');
-        const ctx = canvas.getContext('2d');
-        const dpr = window.devicePixelRatio || 1;
-        const rect = canvas.getBoundingClientRect();
-        canvas.width = rect.width * dpr;
-        canvas.height = 200 * dpr;
-        ctx.scale(dpr, dpr);
-        const W = rect.width;
-        const H = 200;
-
-        ctx.clearRect(0, 0, W, H);
-
-        const prices = history.map(h => h.stock_price);
-        const minP = Math.min(...prices) - 5;
-        const maxP = Math.max(...prices) + 5;
-        const range = maxP - minP || 1;
-        const pad = { top: 15, bottom: 25, left: 5, right: 5 };
-        const chartW = W - pad.left - pad.right;
-        const chartH = H - pad.top - pad.bottom;
-
-        const points = prices.map((p, i) => ({
-            x: pad.left + (i / Math.max(prices.length - 1, 1)) * chartW,
-            y: pad.top + (1 - (p - minP) / range) * chartH
-        }));
-
-        // Gradient fill
-        const lastPrice = prices[prices.length - 1];
-        const firstPrice = prices[0];
-        const isUp = lastPrice >= firstPrice;
-        const fillGrad = ctx.createLinearGradient(0, pad.top, 0, H);
-        fillGrad.addColorStop(0, isUp ? 'rgba(76,175,80,0.25)' : 'rgba(244,67,54,0.25)');
-        fillGrad.addColorStop(1, 'rgba(0,0,0,0)');
-
-        ctx.beginPath();
-        ctx.moveTo(points[0].x, points[0].y);
-        for (let i = 1; i < points.length; i++) {
-            ctx.lineTo(points[i].x, points[i].y);
-        }
-        ctx.lineTo(points[points.length - 1].x, H - pad.bottom);
-        ctx.lineTo(points[0].x, H - pad.bottom);
-        ctx.closePath();
-        ctx.fillStyle = fillGrad;
-        ctx.fill();
-
-        // Line
-        ctx.beginPath();
-        ctx.moveTo(points[0].x, points[0].y);
-        for (let i = 1; i < points.length; i++) {
-            ctx.lineTo(points[i].x, points[i].y);
-        }
-        ctx.strokeStyle = isUp ? '#4CAF50' : '#F44336';
-        ctx.lineWidth = 2.5;
-        ctx.lineJoin = 'round';
-        ctx.stroke();
-
-        // Data points
-        points.forEach((pt, i) => {
-            ctx.beginPath();
-            ctx.arc(pt.x, pt.y, 4, 0, Math.PI * 2);
-            ctx.fillStyle = isUp ? '#4CAF50' : '#F44336';
-            ctx.fill();
-            ctx.strokeStyle = 'rgba(0,0,0,0.5)';
-            ctx.lineWidth = 1;
-            ctx.stroke();
-        });
-
-        // Labels
-        ctx.fillStyle = 'rgba(255,255,255,0.4)';
-        ctx.font = '11px Inter, sans-serif';
-        ctx.textAlign = 'center';
-        const labelInterval = Math.max(1, Math.floor(points.length / 6));
-        points.forEach((pt, i) => {
-            if (i % labelInterval === 0 || i === points.length - 1) {
-                ctx.fillText(prices[i].toFixed(0), pt.x, H - 5);
+    
+    if (refreshKbBtn) refreshKbBtn.addEventListener('click', fetchKnowledgeBase);
+    
+    if (kbIngestBtn) {
+        kbIngestBtn.addEventListener('click', async () => {
+            const sourceInput = document.getElementById('kbSourceName');
+            const contentInput = document.getElementById('kbContent');
+            const statusEl = document.getElementById('kbStatus');
+            const isUrlInput = document.getElementById('kbIsUrl');
+            const spinner = kbIngestBtn.querySelector('.spinner');
+            const btnText = kbIngestBtn.querySelector('.btn-text');
+            
+            const source_name = sourceInput.value.trim();
+            const content = contentInput.value.trim();
+            const is_url = isUrlInput ? isUrlInput.checked : false;
+            
+            if (!content || (!is_url && !source_name)) {
+                statusEl.textContent = "Please provide content. Source Name is required unless 'Content is a URL' is checked.";
+                statusEl.style.color = "#ff6b6b";
+                statusEl.classList.remove('hidden');
+                return;
+            }
+            
+            kbIngestBtn.disabled = true;
+            spinner.classList.remove('hidden');
+            btnText.textContent = is_url ? "Scraping & Embedding..." : "Processing & Embedding...";
+            statusEl.classList.add('hidden');
+            
+            try {
+                const res = await fetch(`${API_BASE}/api/knowledge`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ source_name, content, is_url })
+                });
+                const data = await res.json();
+                
+                statusEl.classList.remove('hidden');
+                if (data.success) {
+                    statusEl.textContent = data.message;
+                    statusEl.style.color = "#4ADE80";
+                    sourceInput.value = '';
+                    contentInput.value = '';
+                    fetchKnowledgeBase(); // refresh
+                } else {
+                    statusEl.textContent = data.message || "Failed to ingest document.";
+                    statusEl.style.color = "#ff6b6b";
+                }
+            } catch (e) {
+                statusEl.textContent = "Connection error.";
+                statusEl.style.color = "#ff6b6b";
+                statusEl.classList.remove('hidden');
+            } finally {
+                kbIngestBtn.disabled = false;
+                spinner.classList.add('hidden');
+                btnText.textContent = "Ingest & Embed";
             }
         });
     }
-
-    if (stockSearchBtn) stockSearchBtn.addEventListener('click', fetchStock);
-    if (stockSearchInput) stockSearchInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') fetchStock(); });
+    
+    // Auto-fetch knowledge base when tab is clicked
+    navBtns.forEach(btn => {
+        if (btn.dataset.view === 'knowledgeView') {
+            btn.addEventListener('click', fetchKnowledgeBase);
+        }
+    });
 
 });

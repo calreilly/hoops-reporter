@@ -3,7 +3,7 @@ import sys
 import json
 import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.models.openai import OpenAIChatModel
 from dotenv import load_dotenv
@@ -24,6 +24,7 @@ retriever.ingest()
 @dataclass
 class AgentDependencies:
     mcp_session: ClientSession
+    rag_sources: list = field(default_factory=list)
 
 model = OpenAIChatModel(model_name="gpt-4o-mini")
 
@@ -110,7 +111,12 @@ def search_knowledge_base(ctx: RunContext[AgentDependencies], query: str) -> str
     print(f"[Agent Tool Call] -> search_knowledge_base('{query}')")
     results = retriever.hybrid_search(query, top_k=3)
     if results:
-        return "\n---\n".join(results)
+        formatted = []
+        for r in results:
+            source_name = r["metadata"].get("source", "Unknown Document")
+            ctx.deps.rag_sources.append({"source": source_name, "content": r["content"]})
+            formatted.append(f"[Source: {source_name}]\n{r['content']}")
+        return "\n---\n".join(formatted)
     return "No relevant articles found."
 
 

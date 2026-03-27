@@ -35,7 +35,7 @@
             <button class="nav-btn" data-view="reportView"><span class="icon">✍️</span>Reporter</button>
             <button class="nav-btn" data-view="chatView"><span class="icon">💬</span>Ask the Reporter</button>
             <button class="nav-btn" data-view="spotlightView"><span class="icon">⭐</span>Spotlight</button>
-            <button class="nav-btn" data-view="stockView"><span class="icon">📈</span>Stock Market</button>
+            <button class="nav-btn" data-view="knowledgeView"><span class="icon">📚</span>Knowledge Base</button>
             <button class="nav-btn" data-view="analyticsView"><span class="icon">📊</span>Analytics</button>
         </nav>
 
@@ -139,6 +139,13 @@
                         <p>Enter a player name to generate their spotlight profile.</p>
                     </div>
                 </div>
+                <!-- RAG Sources Toggle -->
+                <div class="rag-sources-panel hidden" id="spotlightSourcesPanel" style="margin-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1rem;">
+                    <button class="secondary-btn btn-sm w-100" id="spotlightSourcesToggle" style="background: rgba(255,255,255,0.05); padding: 0.75rem; border-radius: 8px; color: var(--text-light); border: 1px solid rgba(255,255,255,0.1); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem; transition: background 0.2s;">
+                        📚 View RAG Sources (0)
+                    </button>
+                    <div id="spotlightSourcesList" class="hidden" style="margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.75rem;"></div>
+                </div>
             </div>
         </main>
 
@@ -163,51 +170,75 @@
                 <div class="eval-log" id="evalLog">
                     <p style="color: var(--text-muted); text-align: center;">No evaluations yet. Generate reports or view stories to populate.</p>
                 </div>
+
+                <hr style="border: 0; height: 1px; background: rgba(255,255,255,0.05); margin: 2rem 0;">
+                
+                <div class="panel-header">
+                    <h2>🎯 RAG Evaluation Suite</h2>
+                    <button class="primary-btn shrink-btn" id="runRagEvalBtn">Run Batch Eval</button>
+                </div>
+                <div id="ragEvalStatus" class="hidden" style="margin-bottom: 1.5rem; color: var(--text-muted); text-align: center;">
+                    <span class="pulse-dot" style="display:inline-block; width:8px; height:8px; background:var(--accent); border-radius:50%; margin-right:8px; animation:pulse 1.5s infinite;"></span>
+                    Running LLM-as-a-judge constraints on sample queries... (~30 seconds)
+                </div>
+                <div class="analytics-summary hidden" id="ragEvalSummary" style="margin-bottom: 1rem;">
+                    <div class="stat-card glass-panel" style="flex: 1;">
+                        <div class="stat-value" id="ragPrecisionStat">--</div>
+                        <div class="stat-label">Context Precision</div>
+                        <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 4px;">Relevant Info Retrieved</div>
+                    </div>
+                    <div class="stat-card glass-panel" style="flex: 1;">
+                        <div class="stat-value" id="ragRecallStat">--</div>
+                        <div class="stat-label">Context Recall</div>
+                        <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 4px;">All Info Retrieved</div>
+                    </div>
+                </div>
+                <div class="analytics-summary hidden" id="ragEvalSummary2">
+                    <div class="stat-card glass-panel" style="flex: 1;">
+                        <div class="stat-value" id="ragFaithfulnessStat">--</div>
+                        <div class="stat-label">Faithfulness</div>
+                        <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 4px;">Grounded in Context</div>
+                    </div>
+                    <div class="stat-card glass-panel" style="flex: 1;">
+                        <div class="stat-value" id="ragRelevanceStat">--</div>
+                        <div class="stat-label">Answer Relevance</div>
+                        <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 4px;">Answers the Prompt</div>
+                    </div>
+                </div>
+                <div class="eval-log hidden" id="ragEvalLog" style="margin-top: 1.5rem;"></div>
             </div>
         </main>
 
-        <!-- VIEW: Stock Market (FEATURE 7) -->
-        <main class="view-panel single-column hidden" id="stockView">
+        <!-- VIEW: Knowledge Base (FEATURE 19) -->
+        <main class="view-panel single-column hidden" id="knowledgeView">
             <div class="output-panel glass-panel" style="width: 100%;">
                 <div class="panel-header">
-                    <h2>📈 Player Stock Market</h2>
+                    <h2>📚 Dynamic Knowledge Base</h2>
+                    <button class="primary-btn shrink-btn" id="refreshKbBtn">Refresh Sources</button>
                 </div>
-                <div class="spotlight-search">
-                    <input type="text" id="stockSearchInput" class="chat-input" placeholder="Search player (e.g. LeBron James, Paige Bueckers)" autocomplete="off">
-                    <button class="primary-btn shrink-btn" id="stockSearchBtn">Analyze</button>
-                </div>
-
-                <!-- Stock Price Card -->
-                <div class="stock-card hidden" id="stockCard">
-                    <div class="stock-header">
-                        <h3 id="stockPlayerName">--</h3>
-                        <div class="stock-sentiment-tag" id="stockSentimentTag">Neutral</div>
+                
+                <div class="input-panel glass-panel" style="margin-bottom: 1.5rem; background: rgba(0,0,0,0.1);">
+                    <h3 style="margin-bottom: 1rem; font-size: 1rem;">Ingest New Document to Vector DB</h3>
+                    <div class="input-group">
+                        <input type="text" id="kbSourceName" class="chat-input" placeholder="Title/Source (Optional if scraping URL)">
+                        <textarea id="kbContent" placeholder="Paste article content, scouting notes, or a URL to scrape..." style="margin-top: 0.5rem; height: 100px; padding: 1rem; background: rgba(255,255,255,0.05); color: var(--text-light); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; width: 100%; box-sizing: border-box; resize: vertical;"></textarea>
                     </div>
-                    <div class="stock-price-row">
-                        <div class="stock-price" id="stockPriceValue">100.0</div>
-                        <div class="stock-trend" id="stockTrend">
-                            <span class="trend-arrow" id="trendArrow">—</span>
-                            <span class="trend-pct" id="trendPct">0.0%</span>
-                        </div>
+                    
+                    <div style="margin-top: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
+                        <input type="checkbox" id="kbIsUrl" style="accent-color: var(--primary);">
+                        <label for="kbIsUrl" style="font-size: 0.85rem; color: var(--text-light);">Content is a URL (Auto-Scrape)</label>
                     </div>
-                    <div class="stock-meta">
-                        <span id="stockSnippetCount">0 snippets analyzed</span>
-                        <span id="stockAvgSentiment">Avg: 0.000</span>
-                    </div>
+                    
+                    <button id="kbIngestBtn" class="primary-btn shrink-btn" style="margin-top: 1rem; width: 100%;">
+                        <span class="btn-text">Ingest & Embed</span>
+                        <div class="spinner hidden"></div>
+                    </button>
+                    <div id="kbStatus" class="hidden" style="margin-top: 1rem; font-size: 0.85rem; text-align: center;"></div>
                 </div>
 
-                <!-- Stock Chart -->
-                <div class="stock-chart-wrapper hidden" id="stockChartWrapper">
-                    <h4>Price History</h4>
-                    <canvas id="stockCanvas" width="800" height="200"></canvas>
-                </div>
-
-                <!-- Sentiment Snippets -->
-                <div class="sentiment-list" id="sentimentList">
-                    <div class="empty-state">
-                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 20h20L12 4 2 20z"></path><line x1="12" y1="10" x2="12" y2="14"></line><circle cx="12" cy="17" r="0.5"></circle></svg>
-                        <p>Enter a player name to analyze their media sentiment.</p>
-                    </div>
+                <h3 style="margin-bottom: 1rem; font-size: 1rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.5rem;">Active RAG Sources</h3>
+                <div class="eval-log" id="kbDocumentList" style="max-height: 300px; overflow-y: auto;">
+                    <p style="color: var(--text-muted); text-align: center;">Loading documents...</p>
                 </div>
             </div>
         </main>

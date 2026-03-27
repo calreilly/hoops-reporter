@@ -54,50 +54,6 @@ mcp_server_script = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath
 # ---------- Eval Log ----------
 EVAL_LOG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "eval_log.json")
 
-# ---------- Sentiment Log (Player Stock Market) ----------
-SENTIMENT_LOG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sentiment_log.json")
-
-def log_eval(entry_type, score, note=""):
-    """Append an eval entry to the JSON log."""
-    entry = {
-        "timestamp": datetime.now().isoformat(),
-        "type": entry_type,
-        "score": score,
-        "note": note
-    }
-    try:
-        if os.path.exists(EVAL_LOG_PATH):
-            with open(EVAL_LOG_PATH, 'r') as f:
-                log = json.load(f)
-        else:
-            log = []
-        log.append(entry)
-        with open(EVAL_LOG_PATH, 'w') as f:
-            json.dump(log, f, indent=2)
-    except Exception:
-        pass
-
-def log_sentiment(player_name, avg_score, stock_price, num_snippets):
-    """Append a sentiment scan entry to the sentiment log."""
-    entry = {
-        "timestamp": datetime.now().isoformat(),
-        "player": player_name.lower(),
-        "avg_sentiment": round(avg_score, 3),
-        "stock_price": round(stock_price, 1),
-        "num_snippets": num_snippets
-    }
-    try:
-        if os.path.exists(SENTIMENT_LOG_PATH):
-            with open(SENTIMENT_LOG_PATH, 'r') as f:
-                log = json.load(f)
-        else:
-            log = []
-        log.append(entry)
-        with open(SENTIMENT_LOG_PATH, 'w') as f:
-            json.dump(log, f, indent=2)
-    except Exception:
-        pass
-
 # ---------- Cache ----------
 _cache = {}
 CACHE_TTL = 1800  # 30 minutes
@@ -120,6 +76,25 @@ auditor_agent = Agent(
         "Your job is to review sports journalism for factual consistency, non-absolute language, and bias. "
         "Score the report from 0 to 100 on 'Factuality'. Provide a 1-sentence review thought in 'auditor_note'. "
         "Output ONLY a valid JSON object strictly matching this format without markdown codeblocks: {\"factuality_score\": 95, \"auditor_note\": \"The report accurately cites injuries...\"}"
+    ),
+    output_type=str
+)
+
+# ---------- Ragas-Style Evaluator Agent ----------
+ragas_evaluator_agent = Agent(
+    model=OpenAIChatModel(model_name="gpt-4o-mini"),
+    system_prompt=(
+        "You are an expert Retrieval-Augmented Generation (RAG) Evaluator modeled after the 'ragas' framework. "
+        "You will receive:\n"
+        "1. A User Query\n"
+        "2. The Retrieved Context from the vector database\n"
+        "3. The Generated Answer from the RAG agent\n\n"
+        "You must evaluate the RAG pipeline on 4 metrics, providing a score from 0.0 to 1.0 for each:\n"
+        "- context_precision: Is the retrieved context relevant to the query? (1.0 = highly relevant, 0.0 = irrelevant)\n"
+        "- context_recall: Does the retrieved context contain all the information needed to answer the query? (1.0 = yes, 0.0 = missing crucial info)\n"
+        "- faithfulness: Is the generated answer completely grounded in the retrieved context? (1.0 = no hallucinations, 0.0 = made up facts)\n"
+        "- answer_relevance: Does the generated answer directly address the user's query? (1.0 = perfect answer, 0.0 = didn't answer the question)\n\n"
+        "Output ONLY a raw JSON object with these 4 keys and their float scores, e.g. {\"context_precision\": 0.9, \"context_recall\": 0.8, \"faithfulness\": 1.0, \"answer_relevance\": 0.95}"
     ),
     output_type=str
 )
@@ -187,7 +162,11 @@ def search_archive(ctx: RunContext[NewsletterDeps], query: str) -> str:
     print(f"[Newsletter Tool] -> search_archive('{query}')")
     results = rag_retriever.hybrid_search(query, top_k=3)
     if results:
-        return "\n---\n".join(results)
+        formatted = []
+        for r in results:
+            src = r["metadata"].get("source", "Unknown")
+            formatted.append(f"[Source: {src}]\n{r['content']}")
+        return "\n---\n".join(formatted)
     return "No relevant historical context found."
 
 # ---------- Newsletter Fact-Check Auditor (Eval) ----------
@@ -279,26 +258,7 @@ spotlight_agent = Agent(
     )
 )
 
-# ---------- Sentiment Analysis Agent (Player Stock Market) ----------
-sentiment_agent = Agent(
-    model=OpenAIChatModel(model_name="gpt-4o-mini"),
-    system_prompt=(
-        "You are a Sports Media Sentiment Analyst. "
-        "IMPORTANT: The current date is March 23, 2026. We are in the 2025-26 season. "
-        "You will receive a list of news snippets about a basketball player. "
-        "For EACH snippet, analyze the sentiment toward the player and assign a score.\n\n"
-        "SCORING SCALE:\n"
-        "-1.0 = Extremely negative (career-ending injury, suspension, major controversy)\n"
-        "-0.5 = Moderately negative (poor performance, team loss blamed on player)\n"
-        " 0.0 = Neutral (roster move, general mention, stats without context)\n"
-        "+0.5 = Moderately positive (good game, praise from coaches)\n"
-        "+1.0 = Extremely positive (MVP candidacy, record-breaking, championship heroics)\n\n"
-        "Output ONLY a valid JSON array (no markdown codeblocks) with this format:\n"
-        '[{"snippet": "first 60 chars of snippet...", "score": 0.5, "rationale": "one sentence why"}]\n\n'
-        "If no snippets are relevant to the player, return an empty array: []"
-    ),
-    output_type=str
-)
+
 
 # ---------- CORS ----------
 app.add_middleware(
@@ -398,7 +358,7 @@ async def chat(req: ChatRequest):
                             "args": str(getattr(part, 'args', ''))[:100]
                         })
             
-            return {"reply": reply, "tool_trace": tool_trace}
+            return {"reply": reply, "tool_trace": tool_trace, "rag_sources": deps.rag_sources}
 
 # ==========================================
 # FEATURE 3: Player Spotlight
@@ -419,7 +379,13 @@ async def get_player_spotlight(player_name: str):
             
             # RAG archive search
             rag_results = rag_retriever.hybrid_search(player_name, top_k=3)
-            raw_data["archive"] = "\n---\n".join(rag_results) if rag_results else "No scouting notes found."
+            formatted_rag = []
+            rag_sources = []
+            for r in rag_results:
+                src = r["metadata"].get("source", "Unknown")
+                formatted_rag.append(f"[Source: {src}]\n{r['content']}")
+                rag_sources.append({"source": src, "content": r["content"]})
+            raw_data["archive"] = "\n---\n".join(formatted_rag) if formatted_rag else "No scouting notes found."
             
             # Try to get roster (if team is mentioned in search results)
             try:
@@ -449,7 +415,7 @@ async def get_player_spotlight(player_name: str):
     except Exception:
         trust_score = 75
     
-    return {"card": card_text, "trust_score": trust_score}
+    return {"card": card_text, "trust_score": trust_score, "rag_sources": rag_sources}
 
 # ==========================================
 # FEATURE 4: Custom Report (with pipeline trace)
@@ -614,172 +580,115 @@ async def get_eval_history():
     except Exception:
         return {"entries": [], "total_evals": 0, "avg_score": 0, "by_type": {}}
 
+# ==========================================
+# FEATURE 18: Ragas-Style Evaluation Suite
+# ==========================================
+@app.post("/api/eval-rag")
+async def run_rag_eval():
+    test_queries = [
+        "Where is Donovan Clingan currently playing?",
+        "Tell me about Paige Bueckers and her current performance.",
+        "What are the biggest recent injuries in college basketball?"
+    ]
+    
+    results = []
+    python_exe = sys.executable
+    server_parameters = StdioServerParameters(command=python_exe, args=[mcp_server_script])
+    
+    async with stdio_client(server_parameters) as (read, write):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+            deps = AgentDependencies(mcp_session=session)
+            
+            for query in test_queries:
+                # Run the RAG Chat Agent
+                chat_res = await chat_agent.run(query, deps=deps)
+                try:
+                    answer = chat_res.new_messages()[-1].parts[-1].content
+                except Exception:
+                    answer = getattr(chat_res, 'data', str(chat_res))
+                
+                # Extract context used
+                context_used = "\n\n".join([s.get("content", "") for s in deps.rag_sources])
+                deps.rag_sources = [] # reset for next query
+                
+                # Run Evaluator Agent
+                eval_prompt = f"QUERY:\n{query}\n\nRETRIEVED CONTEXT:\n{context_used}\n\nGENERATED ANSWER:\n{answer}"
+                eval_res = await ragas_evaluator_agent.run(eval_prompt)
+                
+                try:
+                    eval_str = eval_res.data.strip()
+                    if eval_str.startswith("```json"): eval_str = eval_str[7:]
+                    if eval_str.endswith("```"): eval_str = eval_str[:-3]
+                    scores = json.loads(eval_str.strip())
+                except Exception:
+                    scores = {"context_precision": 0, "context_recall": 0, "faithfulness": 0, "answer_relevance": 0}
+                
+                results.append({
+                    "query": query,
+                    "answer": answer,
+                    "scores": scores
+                })
+                
+    # Calculate averages
+    if results:
+        avg_precision = sum(r["scores"].get("context_precision", 0) for r in results) / len(results)
+        avg_recall = sum(r["scores"].get("context_recall", 0) for r in results) / len(results)
+        avg_faithfulness = sum(r["scores"].get("faithfulness", 0) for r in results) / len(results)
+        avg_relevance = sum(r["scores"].get("answer_relevance", 0) for r in results) / len(results)
+    else:
+        avg_precision = avg_recall = avg_faithfulness = avg_relevance = 0
+        
+    return {
+        "metrics": {
+            "context_precision": round(avg_precision, 2),
+            "context_recall": round(avg_recall, 2),
+            "faithfulness": round(avg_faithfulness, 2),
+            "answer_relevance": round(avg_relevance, 2)
+        },
+        "details": results
+    }
+
+# ==========================================
+# FEATURE 19: Dynamic Knowledge Base Manager
+# ==========================================
+class KnowledgeRequest(BaseModel):
+    source_name: str
+    content: str
+    is_url: bool = False
+
+@app.get("/api/knowledge")
+async def get_knowledge_base():
+    try:
+        sources = rag_retriever.get_all_documents()
+        return {"sources": sources}
+    except Exception as e:
+        return {"error": str(e), "sources": []}
+
+@app.post("/api/knowledge")
+async def add_knowledge(req: KnowledgeRequest):
+    try:
+        content_to_ingest = req.content
+        source_title = req.source_name
+        
+        if req.is_url:
+            resp = requests.get(req.content, timeout=10)
+            soup = BeautifulSoup(resp.text, 'html.parser')
+            paragraphs = soup.find_all('p')
+            content_to_ingest = "\n\n".join([p.get_text() for p in paragraphs if p.get_text().strip()])
+            
+            if not source_title:
+                source_title = soup.title.string.strip() if soup.title and soup.title.string else req.content
+                
+            if not content_to_ingest.strip():
+                return {"success": False, "message": "Failed to extract text from URL."}
+                
+        num_chunks = rag_retriever.add_document(content=content_to_ingest, source_name=source_title)
+        return {"success": True, "message": f"Ingested {num_chunks} chunks from '{source_title}'"}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("backend.server:app", host="127.0.0.1", port=8000, reload=True)
 
-# ==========================================
-# FEATURE 7: Player Stock Market (Sentiment)
-# ==========================================
-
-def fetch_player_news(player_name, max_results=15):
-    """Fetch news about a player from ESPN's public API."""
-    snippets = []
-    
-    # Step 1: Search ESPN for the player's athlete ID
-    try:
-        search_url = f"https://site.api.espn.com/apis/common/v3/search?query={urllib.parse.quote(player_name)}&type=player&limit=1"
-        resp = requests.get(search_url, timeout=6)
-        data = resp.json()
-        items = data.get("items", [])
-        
-        if items:
-            athlete_id = items[0].get("id", "")
-            athlete_name = items[0].get("displayName", player_name)
-            print(f"[Stock Market] Found ESPN athlete: {athlete_name} (ID: {athlete_id})")
-            
-            # Step 2: Fetch player-specific news
-            for sport in ["basketball/nba", "basketball/mens-college-basketball"]:
-                try:
-                    news_url = f"https://site.api.espn.com/apis/site/v2/sports/{sport}/news?athlete={athlete_id}&limit=10"
-                    resp2 = requests.get(news_url, timeout=6)
-                    if resp2.status_code == 200:
-                        articles = resp2.json().get("articles", [])
-                        for a in articles:
-                            headline = a.get("headline", "")
-                            description = a.get("description", "")
-                            content = f"[ESPN] {headline}: {description}" if description else f"[ESPN] {headline}"
-                            if content and content not in snippets:
-                                snippets.append(content)
-                except Exception:
-                    continue
-    except Exception as e:
-        print(f"[Stock Market] ESPN search error: {e}")
-    
-    # Step 3: Also search league-wide news mentioning the player
-    for sport_path in ["basketball/nba", "basketball/mens-college-basketball"]:
-        try:
-            news_url = f"https://site.api.espn.com/apis/site/v2/sports/{sport_path}/news?limit=20"
-            resp = requests.get(news_url, timeout=6)
-            if resp.status_code == 200:
-                articles = resp.json().get("articles", [])
-                name_lower = player_name.lower()
-                for a in articles:
-                    headline = a.get("headline", "")
-                    description = a.get("description", "")
-                    full_text = f"{headline} {description}".lower()
-                    # Check if player is mentioned
-                    name_parts = name_lower.split()
-                    if any(part in full_text for part in name_parts if len(part) > 2):
-                        content = f"[ESPN] {headline}: {description}" if description else f"[ESPN] {headline}"
-                        if content not in snippets:
-                            snippets.append(content)
-        except Exception:
-            continue
-    
-    print(f"[Stock Market] ESPN returned {len(snippets)} news snippets")
-    return snippets[:max_results]
-
-@app.get("/api/stock/{player_name}")
-async def get_player_stock(player_name: str):
-    """Analyze media sentiment for a player using ESPN news and return a stock price."""
-    
-    # 1. Fetch news from ESPN API
-    print(f"[Stock Market] Analyzing sentiment for: {player_name}")
-    raw_snippets = fetch_player_news(player_name, max_results=15)
-    
-    # 2. RAG archive search for additional scouting context
-    rag_results = rag_retriever.hybrid_search(player_name, top_k=3)
-    if rag_results:
-        raw_snippets += [f"[Scouting Archive] {r}" for r in rag_results]
-    
-    print(f"[Stock Market] Total snippets for analysis: {len(raw_snippets)}")
-    
-    if not raw_snippets:
-        return {
-            "stock_price": 100.0,
-            "avg_sentiment": 0.0,
-            "trend_pct": 0.0,
-            "trend_direction": "—",
-            "snippets": [],
-            "history": [],
-            "player": player_name
-        }
-    
-    # 2. Run sentiment analysis via LLM
-    snippet_text = "\n".join([f"{i+1}. {s}" for i, s in enumerate(raw_snippets)])
-    prompt = f"Analyze sentiment for **{player_name}** in these snippets:\n\n{snippet_text}"
-    
-    try:
-        result = await sentiment_agent.run(prompt)
-        raw_output = result.output.strip()
-        # Clean markdown codeblocks if present
-        if raw_output.startswith("```json"): raw_output = raw_output[7:]
-        if raw_output.startswith("```"): raw_output = raw_output[3:]
-        if raw_output.endswith("```"): raw_output = raw_output[:-3]
-        analyzed = json.loads(raw_output.strip())
-    except Exception as e:
-        print(f"Sentiment parse error: {e}")
-        analyzed = []
-    
-    # 3. Compute aggregate metrics
-    if analyzed:
-        scores = [item.get("score", 0) for item in analyzed]
-        avg_sentiment = sum(scores) / len(scores)
-    else:
-        avg_sentiment = 0.0
-    
-    stock_price = 100.0 + (avg_sentiment * 50.0)
-    
-    # 4. Get history and compute trend
-    history = []
-    try:
-        if os.path.exists(SENTIMENT_LOG_PATH):
-            with open(SENTIMENT_LOG_PATH, 'r') as f:
-                all_logs = json.load(f)
-            history = [e for e in all_logs if e.get("player") == player_name.lower()]
-    except Exception:
-        pass
-    
-    trend_pct = 0.0
-    trend_direction = "—"
-    if history:
-        last_price = history[-1].get("stock_price", 100.0)
-        if last_price > 0:
-            trend_pct = round(((stock_price - last_price) / last_price) * 100, 1)
-            trend_direction = "⬆️" if trend_pct > 0 else "⬇️" if trend_pct < 0 else "—"
-    
-    # 5. Log this scan
-    log_sentiment(player_name, avg_sentiment, stock_price, len(analyzed))
-    
-    # 6. Re-read updated history
-    try:
-        if os.path.exists(SENTIMENT_LOG_PATH):
-            with open(SENTIMENT_LOG_PATH, 'r') as f:
-                all_logs = json.load(f)
-            history = [e for e in all_logs if e.get("player") == player_name.lower()]
-    except Exception:
-        pass
-    
-    return {
-        "stock_price": round(stock_price, 1),
-        "avg_sentiment": round(avg_sentiment, 3),
-        "trend_pct": trend_pct,
-        "trend_direction": trend_direction,
-        "snippets": analyzed[-15:],
-        "history": history[-30:],
-        "player": player_name
-    }
-
-@app.get("/api/stock-history/{player_name}")
-async def get_stock_history(player_name: str):
-    """Return all historical sentiment scans for a player."""
-    try:
-        if os.path.exists(SENTIMENT_LOG_PATH):
-            with open(SENTIMENT_LOG_PATH, 'r') as f:
-                all_logs = json.load(f)
-            history = [e for e in all_logs if e.get("player") == player_name.lower()]
-            return {"player": player_name, "history": history[-50:]}
-    except Exception:
-        pass
-    return {"player": player_name, "history": []}
