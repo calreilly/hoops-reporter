@@ -19,7 +19,8 @@ load_dotenv()
 # Initialize the retriever for vector DB searches
 data_dir = os.path.join(os.path.dirname(__file__), "data")
 retriever = HybridRetriever(data_dir)
-retriever.ingest()
+if not retriever.documents:
+    retriever.ingest()
 
 @dataclass
 class AgentDependencies:

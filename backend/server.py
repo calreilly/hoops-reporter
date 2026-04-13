@@ -46,13 +46,34 @@ def scrape_ddg(query_str, max_results=8):
 # ---------- RAG Retriever (Knowledge Base) ----------
 data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src", "data")
 rag_retriever = HybridRetriever(data_dir)
-rag_retriever.ingest()
+if not rag_retriever.documents:
+    rag_retriever.ingest()
 
 # ---------- MCP Server Path ----------
 mcp_server_script = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "../hoops-edge/src/mcp_server.py")
 
 # ---------- Eval Log ----------
 EVAL_LOG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "eval_log.json")
+
+def log_eval(eval_type: str, score: int, context: str = ""):
+    """Persist evaluation entries to a JSON log file."""
+    entry = {
+        "type": eval_type,
+        "score": score,
+        "context": context,
+        "timestamp": datetime.now().isoformat()
+    }
+    try:
+        if os.path.exists(EVAL_LOG_PATH):
+            with open(EVAL_LOG_PATH, 'r') as f:
+                log = json.load(f)
+        else:
+            log = []
+        log.append(entry)
+        with open(EVAL_LOG_PATH, 'w') as f:
+            json.dump(log, f, indent=2)
+    except Exception as e:
+        print(f"[Eval Log] Failed to write: {e}")
 
 # ---------- Cache ----------
 _cache = {}
@@ -111,6 +132,8 @@ hot_stories_agent = Agent(
     deps_type=NewsletterDeps,
     system_prompt=(
         "You are a Senior Editor for the Hoops Report, writing a comprehensive basketball newsletter. "
+        f"IMPORTANT: Today's date is {datetime.now().strftime('%B %d, %Y')}. "
+        "You MUST focus on the most recent news and events. Do NOT report on events from weeks ago unless they are ongoing stories. "
         "You will receive initial headlines and snippets, but you also have TOOLS to get more details.\n\n"
         "YOUR WORKFLOW:\n"
         "1. Read the initial headlines provided in the prompt.\n"
@@ -142,8 +165,11 @@ hot_stories_agent = Agent(
 @hot_stories_agent.tool
 def deep_search(ctx: RunContext[NewsletterDeps], query: str) -> str:
     """Search the web for specific details about a basketball story."""
-    print(f"[Newsletter Tool] -> deep_search('{query}')")
-    results = scrape_ddg(query, max_results=6)
+    # Auto-append current month/year to keep results fresh
+    month_year = datetime.now().strftime('%B %Y')
+    dated_query = f"{query} {month_year}" if "2026" not in query.lower() else query
+    print(f"[Newsletter Tool] -> deep_search('{dated_query}')")
+    results = scrape_ddg(dated_query, max_results=6)
     return "\n".join(results) if results else "No additional details found."
 
 @hot_stories_agent.tool
@@ -190,9 +216,9 @@ chat_agent = Agent(
     deps_type=AgentDependencies,
     system_prompt=(
         "You are the Hoops Reporter, an expert basketball assistant. "
-        "IMPORTANT: The current date is March 23, 2026. We are in the 2025-26 NBA season and 2025-26 NCAA season. "
-        "When searching the web, ALWAYS include 'March 2026' or '2025-26 season' in your queries to get current data. "
-        "NEVER reference the 2023-24 season — that data is outdated. "
+        f"IMPORTANT: The current date is {datetime.now().strftime('%B %d, %Y')}. We are in the 2025-26 NBA season and 2025-26 NCAA season. "
+        f"When searching the web, ALWAYS include '{datetime.now().strftime('%B %Y')}' or '2025-26 season' in your queries to get current data. "
+        "NEVER reference outdated seasons — only use current data. "
         "Answer questions about NBA and NCAA basketball concisely and accurately. "
         "You have access to tools to look up real data — always use them when the user asks about a specific team, player, or matchup. "
         "Keep responses conversational, 2-4 sentences unless more detail is needed. "
@@ -220,8 +246,9 @@ async def lookup_roster(ctx: RunContext[AgentDependencies], team_name: str) -> s
 
 @chat_agent.tool
 def chat_web_search(ctx: RunContext[AgentDependencies], query: str) -> str:
-    """Search the web for current basketball news. Automatically targets March 2026 results."""
-    dated_query = f"{query} March 2026" if "2026" not in query else query
+    """Search the web for current basketball news. Automatically targets current month results."""
+    current_month_year = datetime.now().strftime('%B %Y')
+    dated_query = f"{query} {current_month_year}" if "2026" not in query else query
     results = scrape_ddg(dated_query, max_results=4)
     return "\n".join(results) if results else "No results found."
 
@@ -236,8 +263,8 @@ spotlight_agent = Agent(
     model=OpenAIChatModel(model_name="gpt-4o-mini"),
     system_prompt=(
         "You are a Player Profile Writer for the Hoops Report. "
-        "IMPORTANT: Today's date is March 23, 2026. We are in the 2025-26 season. "
-        "Any game or event before March 23, 2026 has ALREADY HAPPENED — write about it in past tense. "
+        f"IMPORTANT: Today's date is {datetime.now().strftime('%B %d, %Y')}. We are in the 2025-26 season. "
+        f"Any game or event before {datetime.now().strftime('%B %d, %Y')} has ALREADY HAPPENED — write about it in past tense. "
         "Do NOT preview or hype upcoming matchups that may have already been played. "
         "If you are unsure whether a game has been played, state results if available or say 'result pending'. "
         "Given raw data about a player (roster info, team recent games, web search results, scouting notes), "
@@ -253,7 +280,7 @@ spotlight_agent = Agent(
         "### Scouting Report\n"
         "[2-3 sentences of analysis from the scouting archive]\n\n"
         "### Latest News\n"
-        "[Key recent news items — ONLY reference events that have already occurred as of March 23, 2026]\n\n"
+        f"[Key recent news items — ONLY reference events that have already occurred as of {datetime.now().strftime('%B %d, %Y')}]\n\n"
         "Use ONLY facts from the provided data. Do NOT fabricate statistics."
     )
 )
@@ -480,11 +507,14 @@ async def get_hot_stories():
         return {**cached, "cached": True}
     
     try:
+        today_str = datetime.now().strftime('%B %d %Y')
+        month_year = datetime.now().strftime('%B %Y')
         queries = [
-            "NCAA tournament March Madness 2026 scores results upsets today",
-            "NBA scores results highlights today 2026",
-            "NBA trade rumors injuries news 2026",
-            "college basketball coaching changes news 2026",
+            f"NBA scores results highlights today {today_str}",
+            f"NBA news trades injuries {month_year}",
+            f"NCAA college basketball news today {today_str}",
+            f"NBA standings playoff race {month_year}",
+            f"college basketball coaching recruiting news {month_year}",
         ]
         
         seen_titles = set()
@@ -509,7 +539,7 @@ async def get_hot_stories():
                 deps = NewsletterDeps(mcp_session=session, raw_snippets=raw_news)
                 
                 result = await hot_stories_agent.run(
-                    f"Today's date is March 23, 2026. Write a comprehensive, detailed newsletter. "
+                    f"Today's date is {datetime.now().strftime('%B %d, %Y')}. Write a comprehensive, detailed newsletter. "
                     f"Use your tools (deep_search, enrich_with_espn, search_archive) to fill in "
                     f"any missing details before writing each story.\n\n"
                     f"INITIAL HEADLINES:\n{raw_news}",
